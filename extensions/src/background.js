@@ -60,13 +60,16 @@ function ownerFor(sender) {
   if (sender.id !== extension.runtime.id || sender.frameId !== 0 || !Number.isInteger(sender.tab?.id)
       || sender.tab.id < 0
       || !/^https?:\/\//.test(sender.url ?? '')) {
-    throw new Error('Only the original response document may request metadata');
+    return null;
   }
   return { tabId: sender.tab.id };
 }
 
 async function inspect(sender, contentType) {
   const owner = ownerFor(sender);
+  // Navigation can retire a document while its initial probe is in flight.
+  // Decline it without exposing another document's metadata or raising an error.
+  if (!owner) return null;
   const key = keyFor(owner.tabId);
   await writes.get(key);
   const stored = (await extension.storage.session.get(key))[key];
@@ -79,7 +82,6 @@ async function inspect(sender, contentType) {
 extension.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== 'json-response-inspect') return;
   const handle = async () => {
-    ownerFor(sender);
     return { response: await inspect(sender, message.contentType) };
   };
   handle().then(

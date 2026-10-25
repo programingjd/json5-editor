@@ -30,7 +30,7 @@ build_module() {
     fi
 }
 
-build_module json5-web-editor gpui_json5_editor_web /workspace/standalone/www/src/wasm
-build_module gpui-json5-processor gpui_json5_processor /workspace/standalone/www/src/worker-wasm
+build_module json5-web-editor gpui_json5_editor_web /workspace/standalone/editor/src/wasm
+build_module gpui-json5-processor gpui_json5_processor /workspace/standalone/editor/src/worker-wasm
 
 cargo +nightly run --locked --manifest-path /workspace/standalone/tools/sbom/Cargo.toml -- /workspace/standalone

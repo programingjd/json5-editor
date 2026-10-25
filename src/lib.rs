@@ -17,6 +17,7 @@ use wasm_bindgen::prelude::*;
 
 mod convert_action;
 mod error_scrollbar;
+mod filename;
 mod info_dialogs;
 mod overlay_frame;
 mod palette;
@@ -69,14 +70,14 @@ struct Json5EditorGlobal {
 }
 impl Global for Json5EditorGlobal {}
 
-struct ThemePreference {
-    system_dark: bool,
-    user_override: Option<bool>,
+struct ColorScheme {
+    dark: bool,
+    overridden: bool,
 }
-impl Global for ThemePreference {}
+impl Global for ColorScheme {}
 
 struct Json5EditorApp {
-    filename: Entity<SharedString>,
+    filename: Entity<filename::Filename>,
     editor: Entity<EditorState>,
     search_panel: Entity<search_panel::EditorSearchPanel>,
     status_bar: Entity<status_bar::EditorStatusBar>,
@@ -218,8 +219,11 @@ impl Json5EditorApp {
 
         let search_panel = search_panel::EditorSearchPanel::new(&editor, window, cx);
         let status_bar = status_bar::EditorStatusBar::new(&editor, cx);
+        let filename_field = filename::Filename::new(filename.clone(), editor.clone(), cx);
         cx.new(|cx: &mut Context<Self>| {
-            let filename_observer = cx.observe(&filename, |_, _, cx| cx.notify());
+            let filename_observer = cx.observe(&filename, |_, filename, cx| {
+                update_document_name(filename.read(cx).as_ref());
+            });
             let conversion_observer = cx.observe(&convert_action, |_, _, cx| cx.notify());
             let mut was_rewrapping = false;
             let layout_observer = cx.observe(&editor, move |_, editor, cx| {
@@ -230,7 +234,7 @@ impl Json5EditorApp {
                 }
             });
             Self {
-                filename,
+                filename: filename_field,
                 editor,
                 search_panel,
                 status_bar,
@@ -253,6 +257,7 @@ impl Json5EditorApp {
     }
 
     fn save(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.filename.update(cx, |filename, cx| filename.commit(window, cx));
         self.info_dialogs.update(cx, |info, cx| {
             info.dismiss(window, cx);
         });
@@ -280,9 +285,9 @@ impl Json5EditorApp {
 impl Render for Json5EditorApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let button_style = toolbar_button_style(cx);
-        let preference = cx.global::<ThemePreference>();
-        let dark = preference.user_override.unwrap_or(preference.system_dark);
-        let overridden = preference.user_override.is_some();
+        let scheme = cx.global::<ColorScheme>();
+        let dark = scheme.dark;
+        let overridden = scheme.overridden;
 
         gpui_kit::component::v_flex()
             .size_full()
@@ -301,6 +306,9 @@ impl Render for Json5EditorApp {
             }))
             .capture_action(
                 cx.listener(|this, _: &gpui_kit::base::input::Escape, window, cx| {
+                    if this.filename.read(cx).is_editing() {
+                        return;
+                    }
                     if this
                         .info_dialogs
                         .update(cx, |info, cx| info.dismiss(window, cx))
@@ -601,7 +609,7 @@ impl Render for Json5EditorApp {
                             .text_xs()
                             .font_family(cx.theme().font_family.clone())
                             .text_color(cx.theme().popover_foreground)
-                            .child(self.filename.read(cx).clone()),
+                            .child(self.filename.clone()),
                     )
                     .content(
                         ToolbarGroup::new("file-actions")
@@ -718,19 +726,7 @@ impl Render for Json5EditorApp {
                                         if this.modal_open(cx) {
                                             return;
                                         }
-                                        let preference = cx.global_mut::<ThemePreference>();
-                                        let dark = !preference
-                                            .user_override
-                                            .unwrap_or(preference.system_dark);
-                                        preference.user_override =
-                                            (dark != preference.system_dark).then_some(dark);
-                                        store_theme_override(match preference.user_override {
-                                            Some(true) => "dark",
-                                            Some(false) => "light",
-                                            None => "",
-                                        });
-                                        set_theme(dark, cx);
-                                        cx.notify();
+                                        request_toggle_color_scheme();
                                     })),
                             )
                             .content(info_dialogs::InfoDialogs::menu(&self.info_dialogs, cx)),
@@ -904,7 +900,6 @@ fn set_theme(dark: bool, cx: &mut App) {
         });
     }
     update_overlay_colors(
-        dark,
         &palette.toolbar.to_hex(),
         &palette.background.to_hex(),
         &editor_heading_color(cx).to_hex(),
@@ -918,6 +913,7 @@ fn set_theme(dark: bool, cx: &mut App) {
 #[wasm_bindgen]
 pub fn run(
     dark: bool,
+    overridden: bool,
     inter_woff2: Vec<u8>,
     mono_woff2: Vec<u8>,
     inter_italic_woff2: Vec<u8>,
@@ -941,20 +937,8 @@ pub fn run(
         cx.text_system()
             .add_fonts(fonts)
             .expect("Failed to register downloaded fonts");
-        cx.set_global(ThemePreference {
-            system_dark: dark,
-            user_override: match load_theme_override().as_str() {
-                "dark" => Some(true),
-                "light" => Some(false),
-                _ => None,
-            }
-            .filter(|value| *value != dark),
-        });
-        if cx.global::<ThemePreference>().user_override.is_none() {
-            store_theme_override("");
-        }
-        let effective_dark = cx.global::<ThemePreference>().user_override.unwrap_or(dark);
-        set_theme(effective_dark, cx);
+        cx.set_global(ColorScheme { dark, overridden });
+        set_theme(dark, cx);
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
             Json5EditorApp::new(window, sbom_url.clone().into(), notice_url.clone().into(), cx)
         })
@@ -977,19 +961,23 @@ fn decode_font(family: &str, woff2: &[u8]) -> Result<Cow<'static, [u8]>, JsValue
         })
 }
 
+// CSS is the source of truth; this only updates GPUI's render snapshot.
 #[wasm_bindgen]
-pub fn set_system_theme(dark: bool) {
+pub fn set_color_scheme(dark: bool, overridden: bool) {
     APPLICATION.with(|application| {
         if let Some(handle) = application.borrow().as_ref() {
             handle.update(|cx| {
-                let preference = cx.global_mut::<ThemePreference>();
-                preference.system_dark = dark;
-                if preference.user_override == Some(dark) {
-                    preference.user_override = None;
-                    store_theme_override("");
+                let Some(current) = cx.try_global::<ColorScheme>() else {
+                    return;
+                };
+                if current.dark == dark && current.overridden == overridden {
+                    return;
                 }
-                let effective_dark = preference.user_override.unwrap_or(dark);
-                set_theme(effective_dark, cx);
+                let palette_changed = current.dark != dark;
+                cx.set_global(ColorScheme { dark, overridden });
+                if palette_changed {
+                    set_theme(dark, cx);
+                }
                 cx.refresh_windows();
             });
         }
@@ -1187,16 +1175,15 @@ pub fn apply_syntax_result(
 #[wasm_bindgen(module = "/src/json5_editor_bridge.js")]
 extern "C" {
     fn is_mac_platform() -> bool;
+    fn update_document_name(name: &str);
     fn set_layout_busy(busy: bool);
-    fn load_theme_override() -> String;
-    fn store_theme_override(value: &str);
+    fn request_toggle_color_scheme();
     fn open_file_picker();
     fn request_open_document(name: &str, contents: &str);
     fn request_save_file(name: &str, formatting: &str, convert_to_json: bool);
     fn request_convert_to_json();
     fn request_revert_document();
     fn update_overlay_colors(
-        dark: bool,
         window_background: &str,
         panel_background: &str,
         heading: &str,

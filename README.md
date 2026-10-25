@@ -21,6 +21,11 @@ project. Most of the application is Rust compiled to **WebAssembly**, using
 Additional credits and the generated software bill of materials are available
 in the editor's **About** dialog.
 
+The shared browser editor lives in [`editor/`](editor/README.md). The standalone
+app in `www/` and the browser extensions in `extensions/` each have a small
+entry point that imports it. Both use the same WASM, document worker, fonts and
+UI; the extension supplies its response stream through the startup API.
+
 ## Build requirements
 
 - Node or compatible runtime.

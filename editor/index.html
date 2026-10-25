@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>JSON5 Editor</title>
+    <style>
+      :root {
+        --system-color-scheme: light;
+        --system-color-scheme-signal: 1px;
+        --color-scheme: var(--system-color-scheme);
+        color-scheme: var(--color-scheme);
+        background: light-dark(#fafafa, #2b2b2b);
+        color: light-dark(#000000, #a9b7c6);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --system-color-scheme: dark;
+          --system-color-scheme-signal: 2px;
+        }
+      }
+
+      :root[data-color-scheme-override="light"] {
+        --color-scheme: light;
+      }
+
+      :root[data-color-scheme-override="dark"] {
+        --color-scheme: dark;
+      }
+
+      /* Let GPUI observe the CSS media-query result without a JavaScript query. */
+      #color-scheme-observer {
+        position: fixed;
+        left: -9999px;
+        width: var(--system-color-scheme-signal);
+        height: 1px;
+        visibility: hidden;
+        pointer-events: none;
+        contain: strict;
+      }
+    </style>
+    <script src="/initial-theme.js" vite-ignore></script>
+  </head>
+  <body>
+    <script type="module" src="/app-entry.js"></script>
+  </body>
+</html>

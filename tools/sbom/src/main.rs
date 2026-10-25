@@ -161,8 +161,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("fonts/Inter.woff2", Some("OFL-1.1")),
         ("fonts/Inter-ital.woff2", Some("OFL-1.1")),
         ("fonts/CommitMono.woff2", Some("OFL-1.1")),
-        ("../www/src/wasm/gpui_json5_editor_web_bg.wasm", None),
-        ("../www/src/worker-wasm/gpui_json5_processor_bg.wasm", None),
+        ("../editor/src/wasm/gpui_json5_editor_web_bg.wasm", None),
+        ("../editor/src/worker-wasm/gpui_json5_processor_bg.wasm", None),
     ] {
         let bytes = fs::read(root.join("assets").join(file))?;
         let name = Path::new(file)

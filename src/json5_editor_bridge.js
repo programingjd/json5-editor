@@ -2,20 +2,23 @@ export function open_file_picker() {
   window.dispatchEvent(new Event('gpui-json5-open'));
 }
 
+export function update_document_name(name) {
+  queueMicrotask(() => window.dispatchEvent(
+    new CustomEvent('gpui-json5-filename', { detail: name }),
+  ));
+}
+
 export function is_mac_platform() {
   const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '';
   return /mac/i.test(platform);
 }
 
-export function update_overlay_colors(dark, window_background, panel_background, heading, foreground, border, hover, active) {
-  document.documentElement.classList.toggle("dark", dark);
+export function update_overlay_colors(window_background, panel_background, heading, foreground, border, hover, active) {
   const style = document.documentElement.style;
   style.setProperty('--processing-window', window_background);
   style.setProperty('--processing-panel', panel_background);
   style.setProperty('--processing-heading', heading);
   for (const [name, value] of Object.entries({foreground, border, hover, active})) style.setProperty('--processing-' + name, value);
-  style.backgroundColor = panel_background;
-  style.color = foreground;
 }
 
 export function request_open_document(name, contents) {
@@ -97,19 +100,9 @@ export function queue_syntax_edit(revision, start, old_end, replacement,
   } }));
 }
 
-export function load_theme_override() {
-  try {
-    const value = localStorage.getItem('gpui-json5-editor.theme-override');
-    return value === 'dark' || value === 'light' ? value : '';
-  } catch { return ''; }
-}
-
-export function store_theme_override(value) {
-  try {
-    if (value === 'dark' || value === 'light') localStorage.setItem('gpui-json5-editor.theme-override', value);
-    else localStorage.removeItem('gpui-json5-editor.theme-override');
-  }
-  catch { /* Retain the override for this session when storage is unavailable. */ }
+export function request_toggle_color_scheme() {
+  // Let the Rust click handler unwind before CSS changes are reported to GPUI.
+  queueMicrotask(() => window.dispatchEvent(new Event('gpui-json5-toggle-color-scheme')));
 }
 
 export function set_layout_busy(busy) {

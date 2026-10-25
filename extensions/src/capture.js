@@ -101,6 +101,12 @@
   }
 
   async function capture() {
+    // A prerendered top-level page can have a nonzero frame ID. Wait until it
+    // becomes the active document before requesting its response metadata.
+    if (document.prerendering) {
+      await new Promise(resolve =>
+        document.addEventListener('prerenderingchange', resolve, { once: true }));
+    }
     const result = await extension.runtime.sendMessage({
       type: 'json-response-inspect', contentType: document.contentType,
     });
@@ -125,6 +131,14 @@
       position: 'fixed', inset: '0', width: '100%', height: '100%',
       border: '0', display: 'block', zIndex: '2147483647',
       colorScheme: 'normal',
+    });
+
+    window.addEventListener('message', event => {
+      if (event.source !== frame.contentWindow || event.origin !== viewerOrigin
+          || event.data?.type !== 'json5-editor-filename' || event.data.token !== token
+          || typeof event.data.name !== 'string') return;
+      response.name = event.data.name;
+      document.title = `${response.name} — JSON5 Editor`;
     });
 
     frame.addEventListener('load', () => {

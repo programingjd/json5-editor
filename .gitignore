@@ -1,6 +1,5 @@
-/www/src/wasm/
-/www/src/worker-wasm/
-/www/node_modules/
+/editor/src/wasm/
+/editor/src/worker-wasm/
 /www/dist/
 /.tools/
 /patches/
@@ -10,3 +9,17 @@
 /README-agent.md
 /AGENTS.md
 /standalone_*.zip
+
+# Local editor and operating-system files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+*.dmp
+
+# Dependencies installed outside the shared www toolchain
+node_modules/
+__pycache__/
+
