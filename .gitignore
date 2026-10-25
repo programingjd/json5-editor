@@ -1,0 +1,12 @@
+/www/src/wasm/
+/www/src/worker-wasm/
+/www/node_modules/
+/www/dist/
+/.tools/
+/patches/
+/target/
+/trivy
+/trivy.exe
+/README-agent.md
+/AGENTS.md
+/standalone_*.zip

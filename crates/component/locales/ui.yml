@@ -1,0 +1,249 @@
+_version: 2
+Attachment:
+  Remove:
+    en: Remove
+  Retry:
+    en: Retry
+Calendar:
+  week.0:
+    en: Su
+  week.1:
+    en: Mo
+  week.2:
+    en: Tu
+  week.3:
+    en: We
+  week.4:
+    en: Th
+  week.5:
+    en: Fr
+  week.6:
+    en: Sa
+  month.January:
+    en: January
+  month.February:
+    en: February
+  month.March:
+    en: March
+  month.April:
+    en: April
+  month.May:
+    en: May
+  month.June:
+    en: June
+  month.July:
+    en: July
+  month.August:
+    en: August
+  month.September:
+    en: September
+  month.October:
+    en: October
+  month.November:
+    en: November
+  month.December:
+    en: December
+DatePicker:
+  placeholder:
+    en: "Select date"
+  time:
+    en: Time
+Select:
+  placeholder:
+    en: "Please select"
+ComboBox:
+  placeholder:
+    en: "Please select"
+  search_placeholder:
+    en: "Search..."
+  empty:
+    en: "No results"
+DropdownButton:
+  more_options:
+    en: More options
+Dock:
+  Unnamed:
+    en: Unnamed
+  Close:
+    en: Close
+  Zoom In:
+    en: Zoom In
+  Zoom Out:
+    en: Zoom Out
+  Collapse:
+    en: Collapse
+  Expand:
+    en: Expand
+ColorPicker:
+  Palette:
+    en: Palette
+  HSLA:
+    en: HSLA
+  Hue:
+    en: Hue
+  Saturation:
+    en: Saturation
+  Lightness:
+    en: Lightness
+  Alpha:
+    en: Alpha
+Dialog:
+  ok:
+    en: OK
+  cancel:
+    en: Cancel
+Command:
+  placeholder:
+    en: Type a command or search...
+  empty:
+    en: No results found.
+List:
+  search_placeholder:
+    en: Search...
+Input:
+  Decrement:
+    en: Decrement
+  Increment:
+    en: Increment
+  Replace:
+    en: Replace
+  Replace All:
+    en: Replace All
+  Cut:
+    en: Cut
+  Copy:
+    en: Copy
+  Paste:
+    en: Paste
+  Select All:
+    en: Select All
+Settings:
+  search_placeholder:
+    en: Search...
+  Reset All:
+    en: Reset All
+Pagination:
+  previous:
+    en: Previous
+  next:
+    en: Next
+Carousel:
+  label:
+    en: Carousel
+  previous:
+    en: Previous slide
+  next:
+    en: Next slide
+  slide:
+    en: Slide %{current} of %{total}
+  pagination:
+    en: Carousel pagination
+  go_to_slide:
+    en: Go to slide %{current}
+Table:
+  SortBy:
+    en: Sort by %{column}
+Chart:
+  open:
+    en: Open
+  high:
+    en: High
+  low:
+    en: Low
+  close:
+    en: Close
+Questionnaire:
+  progress:
+    en: Question %{current} of %{total}
+  previous:
+    en: Previous
+  next:
+    en: Next
+  skip:
+    en: Skip
+  submit:
+    en: Submit
+  error.required:
+    en: Choose an answer to continue.
+  error.optional:
+    en: Choose an answer or skip this question.
+Speech:
+  Start:
+    en: Dictate
+  Stop:
+    en: Stop dictation
+  Unavailable:
+    en: Dictation unavailable
+Diff:
+  BinaryChanges:
+    en: Binary file changed
+  NoTextChanges:
+    en: No text changes in this patch
+  NoChanges:
+    en: No changes
+  EmptyFile:
+    en: Empty file
+  AddedFile:
+    en: Added file
+  DeletedFile:
+    en: Deleted file
+  RenamedFile:
+    en: Renamed
+  CopiedFile:
+    en: Copied
+  HiddenLines:
+    en: "%{count} lines not in patch"
+  ExpandAbove:
+    en: Show %{count} lines above
+  ExpandBelow:
+    en: Show %{count} lines below
+  CollapseFile:
+    en: Collapse %{name}
+  ExpandFile:
+    en: Expand %{name}
+  AddAnnotation:
+    en: Add annotation to line %{line}
+  ConflictedFile:
+    en: Conflicts
+  CurrentChange:
+    en: Current change
+  IncomingChange:
+    en: Incoming change
+  BaseChange:
+    en: Common ancestor
+  AcceptCurrent:
+    en: Accept Current
+  AcceptIncoming:
+    en: Accept Incoming
+  AcceptBoth:
+    en: Accept Both
+  AcceptedCurrent:
+    en: Accepted current change
+  AcceptedIncoming:
+    en: Accepted incoming change
+  AcceptedBoth:
+    en: Accepted both changes
+  UndoResolution:
+    en: Undo
+  Original:
+    en: Original
+  Modified:
+    en: Modified
+  ExpandLines:
+    en: Expand %{count} unchanged lines
+  SourceLine:
+    en: "%{side} line %{line}"
+  AddedLine:
+    en: "%{side} line %{line}, added"
+  RemovedLine:
+    en: "%{side} line %{line}, removed"
+  UnchangedLines:
+    en: "%{count} unchanged lines"
+  SelectLine:
+    en: Select %{side} line %{line}
+  NoNewline:
+    en: No newline at end of file
+  Viewer:
+    en: Diff for %{name}
+  ViewerFiles:
+    en: Diff for %{count} files

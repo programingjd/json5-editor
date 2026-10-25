@@ -1,0 +1,11 @@
+:root {
+  --ui-font-family: Inter, sans-serif;
+  font-family: var(--ui-font-family);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}

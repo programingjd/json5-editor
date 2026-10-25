@@ -1,0 +1,69 @@
+JSON5 Editor - bundled asset and sources notices
+================================================
+
+JSON5 Editor
+------------
+Copyright 2026 programingjd <programingjd@gmail.com>.
+Original application code and modifications by programingjd are licensed under
+the Apache License, Version 2.0. See LICENSE-APACHE at the distribution root.
+Upstream code and assets retain their respective copyrights and licenses below.
+
+
+FONTS:
+
+Inter
+-----
+Copyright 2016 The Inter Project Authors.
+Source: https://github.com/rsms/inter
+License: SIL Open Font License, Version 1.1.
+Upstream license: https://github.com/rsms/inter/blob/master/LICENSE.txt
+Bundled license and copyright notices: assets/fonts/OFL.txt
+
+Commit Mono
+-----------
+Copyright 2023 Eigil Nikolajsen (eigi0088@gmail.com).
+Source: https://github.com/eigilnikolajsen/commit-mono
+License: SIL Open Font License, Version 1.1.
+Upstream license: https://github.com/eigilnikolajsen/commit-mono/blob/main/LICENSE-FONT
+Bundled license and copyright notices: assets/fonts/OFL.txt
+
+
+ICONS:
+
+JetBrains Icons
+---------------
+Copyright 2000-2023 JetBrains s.r.o. and contributors.
+Individual SVG files retain their original copyright notices where supplied.
+Source: https://github.com/JetBrains/intellij-community/tree/master/platform/icons
+Catalogue: https://intellij-icons.jetbrains.design/
+License: Apache License, Version 2.0.
+License URL: https://www.apache.org/licenses/LICENSE-2.0
+Bundled license: assets/icons/LICENSE-APACHE
+
+Zed Industries logo
+-------------------
+icons/zed-logo.svg is the Zed Industries logo supplied for the About dialog.
+Source and brand guidelines: https://zed.dev/brand
+Trademark usage terms: https://zed.dev/brand#trademark
+The Zed name and logos are trademarks of Zed Industries, Inc.
+
+
+SOURCE CODE:
+
+GPUI Kit (forked and modified)
+------------------------------
+Copyright 2024-2026 Longbridge <https://longbridge.com>.
+Source: https://github.com/longbridge/gpui-kit
+License: Apache License, Version 2.0.
+Bundled copyright notice and license: assets/DEPENDENCY-LICENSES.zip (gpui-kit-0.7.1/LICENSE-APACHE)
+This notice is retained with the GPUI Kit-derived asset support code.
+
+License texts and original copyright notices remain with the relevant assets.
+This NOTICE provides attribution and does not replace or modify those licenses.
+
+SOURCE CODE DEPENDENCIES:
+
+Original dependency licenses, copyright and attribution notices are bundled in
+assets/DEPENDENCY-LICENSES.zip. Its index.json identifies each crate, exact version,
+source, license selection and collected documents. See the bundled SBOM for the inventory.
+The archive includes the locked Rust graph, including build dependencies.

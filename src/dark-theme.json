@@ -1,0 +1,73 @@
+{
+  "background": "#2b2b2b",
+  "foreground": "#a9b7c6",
+  "toolbar": "#3c3f41",
+  "popover": "#4b4d4f",
+  "ui_foreground": "#a9b7c6",
+  "icon": "#c5c8c9",
+  "hover": "#4d5051",
+  "active": "#555859",
+  "border": "#626466",
+  "separator": "#292b2c",
+  "selection": "#214283",
+  "caret": "#a9b7c6",
+  "link": "#589df6",
+  "error": "#ff0000",
+  "error_marker": "#bc3f3c",
+  "search": "#155221",
+  "bracket_foreground": "#ffef28",
+  "bracket_background": "#3b514d",
+  "fold_foreground": "#a9b7c6",
+  "fold_background": "#3c3f41",
+  "syntax": {
+    "name": "Darcula JSON5",
+    "appearance": "dark",
+    "style": {
+      "editor.background": "#2b2b2b",
+      "editor.gutter.background": "#2b2b2b",
+      "editor.line_number": "#606366",
+      "editor.active_line.background": "#323232",
+      "editor.active_line_number": "#606366",
+      "editor.invisible": "#4d4d4d",
+      "syntax": {
+        "comment": {
+          "color": "#808080"
+        },
+        "comment.doc": {
+          "color": "#629755"
+        },
+        "string": {
+          "color": "#6a8759"
+        },
+        "string.escape": {
+          "color": "#cc7832"
+        },
+        "boolean": {
+          "color": "#cc7832"
+        },
+        "constant": {
+          "color": "#cc7832"
+        },
+        "number": {
+          "color": "#6897bb"
+        },
+        "property": {
+          "color": "#9876aa"
+        },
+        "punctuation": {
+          "color": "#cc7832"
+        },
+        "punctuation.bracket": {
+          "color": "#a9b7c6"
+        },
+        "punctuation.delimiter": {
+          "color": "#cc7832"
+        },
+        "operator": {
+          "color": "#a9b7c6"
+        }
+      }
+    }
+  },
+  "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/refs/heads/master/platform/platform-resources/src/DefaultColorSchemesManager.xml"
+}

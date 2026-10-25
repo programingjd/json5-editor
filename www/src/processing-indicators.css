@@ -1,0 +1,199 @@
+:root {
+  --processing-foreground: #a9b7c6;
+  --processing-border: #626466;
+  --processing-hover: #4d5051;
+  --processing-active: #555859;
+  --processing-focus: var(--processing-border);
+  --processing-panel: #2b2b2b;
+  --processing-window: #3c3f41;
+  --processing-heading: var(--processing-foreground);
+  --processing-backdrop: color-mix(in srgb, var(--processing-window) 75%, transparent);
+}
+
+.processing-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--processing-border);
+  border-top-color: var(--processing-foreground);
+  border-radius: 50%;
+  animation: processing-spin 800ms linear infinite;
+}
+
+#document-loading {
+  position: fixed;
+  top: var(--editor-top, 0px);
+  left: var(--editor-left, 0px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--editor-width, 100vw);
+  height: var(--editor-height, 100vh);
+  padding: 16px;
+  color: var(--processing-foreground);
+  background: var(--processing-backdrop);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font: 13px/1.5 var(--ui-font-family);
+  text-align: center;
+}
+
+.loading-panel {
+  position: relative;
+  flex: 0 0 auto;
+  margin-block: auto;
+  width: min(432px, 100%);
+  padding: 48px;
+  background: var(--processing-panel);
+  border: 1px solid color-mix(in srgb, var(--processing-border) 50%, transparent);
+  border-radius: 6px;
+}
+
+#document-loading:focus {
+  outline: none;
+}
+
+#document-loading[hidden] {
+  display: none;
+}
+
+.loading-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+#document-loading[data-mode="loading"] .loading-heading {
+  margin-bottom: 8px;
+}
+
+.loading-heading h1 {
+  margin: 0;
+  font: inherit;
+  color: var(--processing-heading);
+  overflow-wrap: anywhere;
+}
+
+#loading-progress {
+  margin-bottom: 16px;
+}
+
+#loading-size {
+  margin: 0 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+#loading-progress-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--processing-border) 35%, transparent);
+}
+
+.loading-progress-fill {
+  height: 100%;
+  background: var(--processing-foreground);
+}
+
+.indeterminate .loading-progress-fill {
+  width: 35%;
+  animation: loading-progress 1.2s ease-in-out infinite alternate;
+}
+
+#loading-progress[hidden],
+.loading-heading .processing-spinner[hidden] {
+  display: none;
+}
+
+@keyframes loading-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(286%); }
+}
+
+.loading-actions[hidden] {
+  display: none;
+}
+
+.loading-actions {
+  display: flex;
+  justify-content: center;
+}
+
+#abort-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 20px;
+  padding: 0.2em 12px 0;
+  color: inherit;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--processing-border) 50%, transparent);
+  border-radius: 3px;
+  font: 400 11px/1 var(--ui-font-family);
+  cursor: pointer;
+}
+
+#abort-loading:hover:enabled {
+  background: var(--processing-hover);
+}
+
+#abort-loading:active:enabled {
+  background: var(--processing-active);
+}
+
+#abort-loading:focus {
+  outline: none;
+}
+
+#abort-loading:focus-visible {
+  outline: 2px solid var(--processing-focus);
+  outline-offset: 2px;
+}
+
+#abort-loading:disabled {
+  opacity: 0.5;
+}
+
+#parser-busy {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+#parser-busy[hidden] {
+  display: none;
+}
+
+#parser-busy .processing-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes processing-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing-spinner { animation: none; }
+  .indeterminate .loading-progress-fill { animation: none; margin-inline: auto; }
+}

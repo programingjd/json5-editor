@@ -1,0 +1,14 @@
+FROM docker.io/library/rust:latest
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends clang llvm \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install wasm-bindgen-cli --version 0.2.121 --locked
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends binaryen \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CC_wasm32_unknown_unknown=clang
+ENV CFLAGS_wasm32_unknown_unknown=--target=wasm32-unknown-unknown

@@ -1,0 +1,74 @@
+{
+  "background": "#fafafa",
+  "foreground": "#000000",
+  "toolbar": "#f0f0f0",
+  "popover": "#f7f7f7",
+  "ui_foreground": "#000000",
+  "icon": "#6e6e6e",
+  "hover": "#dfdfdf",
+  "active": "#cfcfcf",
+  "border": "#D0D0D0",
+  "separator": "#D0D0D0",
+  "selection": "#5974ab",
+  "caret": "#000000",
+  "link": "#0000ff",
+  "error": "#ff0000",
+  "error_marker": "#cf5b56",
+  "search": "#ccccff",
+  "bracket_foreground": "#000000",
+  "bracket_background": "#99ccff",
+  "fold_foreground": "#666666",
+  "fold_background": "#ecfaeb",
+  "syntax": {
+    "name": "JetBrains Default JSON5",
+    "appearance": "light",
+    "style": {
+      "editor.background": "#fafafa",
+      "editor.foreground": "#000000",
+      "editor.gutter.background": "#f0f0f0",
+      "editor.line_number": "#999999",
+      "editor.active_line.background": "#fffae3",
+      "editor.active_line_number": "#999999",
+      "editor.invisible": "#e6e6e6",
+      "syntax": {
+        "comment": {
+          "color": "#808080"
+        },
+        "comment.doc": {
+          "color": "#808080"
+        },
+        "string": {
+          "color": "#008000"
+        },
+        "string.escape": {
+          "color": "#000080"
+        },
+        "boolean": {
+          "color": "#000080"
+        },
+        "constant": {
+          "color": "#000080"
+        },
+        "number": {
+          "color": "#0000ff"
+        },
+        "property": {
+          "color": "#660e7a"
+        },
+        "punctuation": {
+          "color": "#000000"
+        },
+        "punctuation.bracket": {
+          "color": "#000000"
+        },
+        "punctuation.delimiter": {
+          "color": "#000000"
+        },
+        "operator": {
+          "color": "#000000"
+        }
+      }
+    }
+  },
+  "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/refs/heads/master/platform/platform-resources/src/DefaultColorSchemesManager.xml"
+}

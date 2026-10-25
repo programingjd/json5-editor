@@ -1,0 +1,74 @@
+{
+  "color_schemes": [
+    {
+      "name": "JetBrains Darcula theme",
+      "website": "",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/JetBrains/intellij-community/blob/master/platform/platform-resources/src/DefaultColorSchemesManager.xml",
+      "license_url": "https://github.com/JetBrains/intellij-community/blob/master/LICENSE.txt"
+    }
+  ],
+  "icons": [
+    {
+      "name": "JetBrains Icons",
+      "website": "https://intellij-icons.jetbrains.design/",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/JetBrains/intellij-community/tree/master/platform/icons",
+      "license_url": "https://github.com/JetBrains/intellij-community/blob/master/LICENSE.txt"
+    }
+  ],
+  "fonts": [
+    {
+      "name": "Inter",
+      "website": "https://rsms.me/inter/",
+      "license": "OFL-1.1",
+      "repository": "https://github.com/rsms/inter",
+      "license_url": "https://github.com/rsms/inter/blob/master/LICENSE.txt"
+    },
+    {
+      "name": "CommitMono",
+      "website": "https://commitmono.com/",
+      "license": "OFL-1.1",
+      "repository": "https://github.com/eigilnikolajsen/commit-mono",
+      "license_url": "https://github.com/eigilnikolajsen/commit-mono/blob/main/LICENSE-FONT"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "GPUI",
+      "website": "https://gpui.rs/",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/zed-industries/zed",
+      "license_url": "https://github.com/zed-industries/zed/blob/main/LICENSE-APACHE",
+      "attribution": "by Zed Industries"
+    },
+    {
+      "name": "GPUI Kit",
+      "website": "https://gpui-kit.com/",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/longbridge/gpui-kit",
+      "license_url": "https://github.com/longbridge/gpui-kit/blob/main/LICENSE-APACHE"
+    },
+    {
+      "name": "TreeSitter",
+      "website": "https://tree-sitter.github.io/tree-sitter/",
+      "license": "MIT",
+      "repository": "https://github.com/tree-sitter/tree-sitter",
+      "license_url": "https://github.com/tree-sitter/tree-sitter/blob/master/LICENSE"
+    },
+    {
+      "name": "Tree-Sitter-JSON5-Orchard",
+      "website": "",
+      "license": "MIT",
+      "repository": "https://codeberg.org/grammar-orchard/tree-sitter-json5-orchard",
+      "license_url": "https://codeberg.org/grammar-orchard/tree-sitter-json5-orchard/src/branch/main/LICENSE"
+    },
+    {
+      "name": "wasm-bindgen",
+      "website": "https://wasm-bindgen.github.io/wasm-bindgen/",
+      "license": "MIT",
+      "repository": "https://github.com/wasm-bindgen/wasm-bindgen",
+      "license_url": "https://github.com/wasm-bindgen/wasm-bindgen/blob/main/LICENSE-MIT"
+    }
+  ]
+}

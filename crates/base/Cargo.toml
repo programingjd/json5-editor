@@ -1,0 +1,64 @@
+[package]
+name = "gpui-base"
+version = "0.7.1"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+repository = "https://github.com/longbridge/gpui-kit"
+description = "Editor-owned subset of gpui-base for JSON5 Editor"
+
+[lib]
+doctest = false
+
+[features]
+default = []
+test-support = ["gpui/test-support"]
+inspector = ["gpui/inspector", "gpui_macros/inspector"]
+
+[dependencies]
+anyhow = { version = "1" }
+aho-corasick = "1.1.3"
+data-url = "0.3"
+futures = "0.3"
+gpui = { package = "gpui-pre", version = "=0.3.8" }
+gpui_macros = { package = "gpui-pre-macros", version = "=0.3.8" }
+instant = { version = "0.1", features = ["wasm-bindgen"] }
+lsp-types = { version = "0.97.0", features = ["proposed"] }
+markdown = { version = "1.0.0", features = ["serde"] }
+html5ever = "0.27"
+markup5ever_rcdom = "0.3.0"
+ropey = { version = "=2.0.0-beta.1", features = ["metric_chars", "metric_lines_lf", "metric_utf16"] }
+regex = "1"
+schemars = { version = "1" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1" }
+smallvec = { version = "1" }
+sum-tree = { package = "gpui-pre-sum-tree", version = "=0.3.8" }
+tracing = { version = "0.1.41" }
+unicode-linebreak = "0.1.5"
+unicode-segmentation = "1.12.0"
+web-time = "1"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+smol = { version = "2" }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+async-channel = "2.3.1"
+js-sys = "=0.3.98"
+wasm-bindgen = "=0.2.121"
+wasm-bindgen-futures = "=0.4.71"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+raw-window-handle = { version = "0.6.2" }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSView", "NSWindow", "NSWorkspace"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSString"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"], version = "0.58.0" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("gpui-fast"))'] }

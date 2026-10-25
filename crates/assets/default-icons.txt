@@ -1,0 +1,13 @@
+icons/check.svg
+icons/chevron-down.svg
+icons/chevron-left.svg
+icons/chevron-right.svg
+icons/close.svg
+icons/external-link.svg
+icons/eye-off.svg
+icons/eye.svg
+icons/folder.svg
+icons/loader.svg
+icons/match-case.svg
+icons/replace.svg
+icons/search.svg

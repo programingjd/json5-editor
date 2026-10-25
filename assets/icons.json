@@ -1,0 +1,309 @@
+{
+  "name": "JSON5 Editor icons",
+  "sources": {
+    "jetbrains": {
+      "name": "JetBrains Icons",
+      "license": "Apache-2.0",
+      "catalogue": "https://intellij-icons.jetbrains.design/",
+      "repository": "https://github.com/JetBrains/intellij-community",
+      "retrieved": "2026-10-23"
+    },
+    "zed": {
+      "name": "Zed Industries",
+      "website": "https://zed.dev",
+      "source": "https://zed.dev/brand",
+      "usage_terms": "https://zed.dev/brand#trademark"
+    }
+  },
+  "icons": [
+    {
+      "file": "icons/search.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/search.svg",
+      "sha256": "81e8241e7b38407420c573dfa264cd6df5deac0e8d59b935ce4c02b607bbe342",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/search-history.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/searchHistory.svg",
+      "sha256": "40bf8e6f918cae076c4a40d56dc2c2681a27d6c9c5c7164e268c43bcf03ed22b",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/chevron-down.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/chevronDown.svg",
+      "sha256": "8cc414b79234c71b263f65b11fc71e429411ce13512862add9ccef60264c1c34",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/chevron-left.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/chevronLeft.svg",
+      "sha256": "a1c21ca89e5f0f6263c4ef66b077c6d77dd8ba7dc021a35628456cba13de11c9",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/chevron-right.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/chevronRight.svg",
+      "sha256": "6dc8f3b872ec8b3ce7037e9f2adc40a393449ab88820a7efa9c683fba78c1d98",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/chevron-up.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/chevronUp.svg",
+      "sha256": "14cf5aba194a708e7711f58b02912328dd8e8c8c30f88ed7ea006b9e0eb2baca",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/match-case.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/matchCase.svg",
+      "sha256": "717bba78055f6d107befbb3b49654924c165b3f2fb53437db820bed6b45704b9",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/preserve-case.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/preserveCase.svg",
+      "sha256": "48047175ccdf220714dc35fcd7afa945d17b4692ae3d039261262f1b9365eba8",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/regex.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/regex.svg",
+      "sha256": "613fe25fd83d63e3616d3182d126d524c7466766ba4c38acde1c6d00421828c9",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/new-line.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/newLine.svg",
+      "sha256": "d05858d7fbb8e13e4ebe9bc3473473da996768d79a9cff62c367fed3f9fdcb72",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/collapse-all.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/collapseAll.svg",
+      "sha256": "19f4d4023e6621f998c0ccee8aec2b71b8fe2fb6f38a80b9bfe6c8ed4d451bcf",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/expand-all.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/expandAll.svg",
+      "sha256": "3ed66e8e641730be8e26ec22b108761e0249bf71d3110de9bb2379e294f12f91",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/collapse.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/collapse.svg",
+      "sha256": "7833658ce4e6e2f75cd8053940d0ca8b915d2e248a2832e3d4d0dd8e7f105911",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/expand.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/inline/expand.svg",
+      "sha256": "653ed18af88f0a6129fcec301a121211d39146ccd518040a6dfbbbc690933b0d",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/more-vertical.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/moreVertical.svg",
+      "sha256": "58f3c28350fab059e373bcd04aaaa3a9f2c786e291ad3eafcfef18ee0c4bf2d4",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/undo.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/undo.svg",
+      "sha256": "785ce6cd36860656ed0c65146cfb68167ffeeeeddcea0b76fde4a3d15a9df11a",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/redo.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/redo.svg",
+      "sha256": "82db9c35de86819888ff982ba268b55040e86ec67dc397cd26541d440fd778a6",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/revert.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/vcs/revert.svg",
+      "sha256": "39c353087d43ee3d91992fd1cd848cd19e6e01d92687c47f0b7ffa7280af4902",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/help.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/help.svg",
+      "sha256": "d2f33a762f7c1e619d9e24e184c622db25a8663e95c040f6b274f13f5011566d",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/replace.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/actions/replace.svg",
+      "sha256": "ebd606f6a8c0f3f25e0c66693795474e01a0ca31f9af49e4c465429996dbc812",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/close.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/close.svg",
+      "sha256": "612c8b1ad85fe0174c29556f618ba0bc250f32c9a32df4e9c2f7289ec941c622",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/font.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/fileTypes/font.svg",
+      "sha256": "049689bd55570a4bacda649b609b3fdf5019023673d344775b025097ea7cb268",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/palette.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/toolwindows/palette.svg",
+      "sha256": "90be4bcfc9075f1b905ec663575cb3d6a3afc3c9b162a6fa4aafdcbe65c47bf8",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/jetbrains.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/SettingsSyncIcons/icons/expui/jetBrains.svg",
+      "sha256": "94060deb38d0086fba0b3f81c0ded7eb5dea5728f1985ee2f42de58e3e58ffd6",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/library.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/nodes/library.svg",
+      "sha256": "ba5f3aa9049f2ca58c59826c12527ad315e3b41d2233eb6284d7cc6132d7a1c0",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/save.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/save.svg",
+      "sha256": "e5ae9e72423d4fff5790f7cbacbffb0816777ac226d242a5e0aa14799aa5e5eb",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/open.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/open.svg",
+      "sha256": "9198a3888742424df3cba1579bd8566041af0e5e79ff81919adbad22310bcc32",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/folder-github.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/nodes/folderGithub.svg",
+      "sha256": "0ebb1390a4ccf23df6e0bf35917ef0dc318ba774cfa787da5cfac1f317bff233",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/vcs.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/vcs.svg",
+      "sha256": "7b04f37b0404b705f155b3e0bb7f34f96996ea308fa6c51bbbe63669cebbb691",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/keyboard.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/keyboard.svg",
+      "sha256": "736cfb1cabf4b5957a6c719e4f9b17d61cce8b443306d82a25f6c68dc2933a63",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/external-link.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/ide/externalLink.svg",
+      "sha256": "d7417bdb9711e88d7706f7d7569af5160a1d728e0d399dca9c6ca6785b623abc",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/loader.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/run/widget/loader.svg",
+      "sha256": "843814be51a6f4b938b6007987036f82a6b0341fc9cc6fbc717c1192153b7405",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/plus.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/add.svg",
+      "sha256": "337388830262aeb22502d3954f2bc543c332f025c1fab16a7231acc1fd5254b8",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/eye-off.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/hide.svg",
+      "sha256": "c753f8efb68916bcedc3a2f06e3cfa2c15ed64fc51b53cae4206f27fa1656ab4",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/check.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/actions/checked.svg",
+      "sha256": "32f1b1562a36f4d26e2a04c874e4cd13acdc1f2668a85d8a7d6cca130d3121cf",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/minus.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/remove.svg",
+      "sha256": "02a3716106c09c8049e64b1e0abbbdf11a05abd78ca16b477d5d1b60a785d09a",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/eye.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/show.svg",
+      "sha256": "e3e70aa05e37501e4082f9840b4ed28bedfbc296d6ab499a9c6cac1aa33908e8",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/folder.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/nodes/folder.svg",
+      "sha256": "e78b061f701e39613936bc68751ed51e6cb2b1451dba322cd98ffdfd1a105065",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/edit.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/edit.svg",
+      "sha256": "1609c7d6fc56d19d27625f75a1b3113e74f49d782fd8d2abc42f8bda011f2cef",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/cursor-text.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/windows/mouse/cursorText.svg",
+      "sha256": "cf69eba15d485f45a030ed36ea6e26cf741ebcb42393872c4673e236abb642de",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/file-set.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/SpringApiIcons/icons/expui/fileSet.svg",
+      "sha256": "8b5d6375bc275edce6d0ea2dd6835f2b77097832e3072133a6dd31a5728cad8a",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/find.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/toolwindows/find.svg",
+      "sha256": "cfed34eee676863f029f62765bcb6fdcf82cef511c05c7fc88650b2feaf8fe4c",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/dark-theme-selected.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/meetNewUi/darkThemeSelected.svg",
+      "sha256": "3e57224ad25f0ee59c98a576c415808ea9d883fd0672dbb76ab0c6321e0c319c",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/download.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/download.svg",
+      "sha256": "17445a4572cb0a0319899f7d3f30be35f5f363eb77da80fe6ff676590214133f",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/dark-theme.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/meetNewUi/darkTheme.svg",
+      "sha256": "2cf620fba2ea8f82cacfbeef92825c05d93b048aa861b6b1855c0433264ad70a",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/light-theme.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/meetNewUi/lightTheme.svg",
+      "sha256": "2318e23d9a7a30b4fc40876468d92685faba02ec1ac61b15cc92f190d1d4c684",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/light-theme-selected.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/meetNewUi/lightThemeSelected.svg",
+      "sha256": "ea1b2b248328008a2a84e8f0512304125728e0c56bab33b5037df9546c1339ca",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/zed-logo.svg",
+      "provider": "zed",
+      "source": "https://zed.dev/brand",
+      "usage_terms": "https://zed.dev/brand#trademark",
+      "sha256": "d2b75c63e8f18cfb24b4d8efa2f4531b5b3f5622ab0c1a6791b7a45b4cd5b021"
+    }
+  ]
+}
