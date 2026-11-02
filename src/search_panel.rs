@@ -378,6 +378,7 @@ impl EditorSearchPanel {
             .min_w_0()
             .min_h_8()
             .gap_1()
+            .pr_2()
             .child(
                 div()
                     .w_96()

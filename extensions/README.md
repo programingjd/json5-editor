@@ -88,6 +88,12 @@ was `binary/octet-stream`.
 
 ## Permissions and storage
 
+Ctrl/Cmd+F opens the editor's search instead of the browser's Find bar while
+focus is inside the editor page. The response parent page forwards this shortcut
+to the extension frame when focus is outside the frame; the origin, parent and
+per-frame token are checked before accepting it. Ordinary pages are unaffected,
+and no browser-wide extension shortcut is registered.
+
 - HTTP/HTTPS host access and `webRequest` observe original document MIME headers.
 - Chromium's `declarativeNetRequestWithHostAccess` applies document-only header rules.
 - Firefox's `webRequestBlocking` changes headers on JSON/JSON5 documents only.

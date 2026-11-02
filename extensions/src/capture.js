@@ -133,6 +133,20 @@
       colorScheme: 'normal',
     });
 
+    // Keyboard events do not bubble across the iframe boundary. Handle the
+    // original response page as well when it, rather than the viewer, has focus.
+    window.addEventListener('keydown', event => {
+      if (!frame.isConnected || frame.inert || frame.style.visibility === 'hidden'
+          || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey
+          || event.isComposing || event.key.toLowerCase() !== 'f') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) {
+        frame.focus();
+        frame.contentWindow.postMessage({ type: 'json5-editor-search', token }, viewerOrigin);
+      }
+    }, { capture: true });
+
     window.addEventListener('message', event => {
       if (event.source !== frame.contentWindow || event.origin !== viewerOrigin
           || event.data?.type !== 'json5-editor-filename' || event.data.token !== token
