@@ -961,6 +961,26 @@ fn decode_font(family: &str, woff2: &[u8]) -> Result<Cow<'static, [u8]>, JsValue
         })
 }
 
+// Page-level shortcuts must work independently of the DOM keyboard receiver.
+#[wasm_bindgen]
+pub fn open_search() {
+    APPLICATION.with(|application| {
+        let application = application.borrow();
+        let Some(handle) = application.as_ref() else { return };
+        handle.update(|cx| {
+            let Some(window) = cx.windows().into_iter().next() else { return };
+            let _ = cx.update_window(window, |_, window, cx| {
+                let Some(editor) = cx.try_global::<Json5EditorGlobal>()
+                    .map(|global| global.editor.clone()) else { return };
+                let focus = editor.read(cx).focus_handle(cx);
+                // Route through the application's existing handler, including
+                // its modal-dialog guard, without first moving the caret.
+                focus.dispatch_action(&gpui_kit::base::input::Search, window, cx);
+            });
+        });
+    });
+}
+
 // CSS is the source of truth; this only updates GPUI's render snapshot.
 #[wasm_bindgen]
 pub fn set_color_scheme(dark: bool, overridden: bool) {

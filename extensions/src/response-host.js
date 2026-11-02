@@ -47,6 +47,12 @@ export function createInitialDocument() {
       window.removeEventListener('message', receive);
       const port = event.ports[0];
       const control = event.ports[1];
+      window.addEventListener('message', request => {
+        if ((request.source !== null && request.source !== window.parent)
+            || request.origin !== event.origin || request.data?.token !== token
+            || request.data?.type !== 'json5-editor-search') return;
+        window.dispatchEvent(new Event('gpui-json5-search'));
+      });
       // Keep title updates alive after the completed stream's ports close.
       window.addEventListener('gpui-json5-filename', ({ detail: name }) => {
         window.parent.postMessage({ type: 'json5-editor-filename', token, name }, event.origin);

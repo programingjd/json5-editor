@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { wasmCsp } from './build/wasm-csp.js';
 import { browserGpuDefaults } from './build/browser-gpu-defaults.js';
 import { browserClipboard } from './build/browser-clipboard.js';
+import { browserInputFocus } from './build/browser-input-focus.js';
 
 const editorRoot = fileURLToPath(new URL('.', import.meta.url));
 const projectRoot = path.resolve(editorRoot, '..');
@@ -41,6 +42,7 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
       wasmCsp(),
       browserGpuDefaults(),
       browserClipboard(),
+      browserInputFocus(),
       wasm(),
       viteStaticCopy({
         targets: [

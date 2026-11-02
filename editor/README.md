@@ -22,6 +22,12 @@ compatibility adapters for pinned GPUI-generated bindings in `build/`. Build
 dependencies are installed once from `www/package-lock.json`. The shared module
 has no npm runtime dependencies.
 
+`src/browser-shortcuts.js` intercepts Ctrl/Cmd+F during the page's keydown capture
+phase and opens the existing GPUI search panel through the WASM `open_search`
+entry point. This works independently of DOM focus, including when the canvas
+or toolbar has focus. Loading overlays and GPUI modal dialogs keep their normal
+input guards. Browser chrome, such as the address bar, owns its own shortcuts.
+
 The inline stylesheet in `index.html` selects `--color-scheme` through the
 system media query. Setting `data-color-scheme-override="light"` or `"dark"` on `<html>`
 overrides that variable. `src/initial-theme.js` restores the saved attribute

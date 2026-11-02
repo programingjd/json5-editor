@@ -4037,7 +4037,16 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 if is_active {
                     if let Some(bg_color) = active_line_color {
                         window.paint_quad(fill(
-                            Bounds::new(p, size(bounds.size.width, height)),
+                            // Match selection's fixed viewport edge, rather
+                            // than the narrower/scrolled text-layout bounds.
+                            Bounds::new(
+                                p,
+                                size(
+                                    (input_bounds.right() + editor_paddings.right - p.x)
+                                        .max(px(0.)),
+                                    height,
+                                ),
+                            ),
                             bg_color,
                         ));
                     }
