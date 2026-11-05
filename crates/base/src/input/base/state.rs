@@ -122,6 +122,7 @@ pub struct PrepaintCaretGeometry {
     line_height: Pixels,
     input_bounds: gpui::Bounds<Pixels>,
     scroll_offset: Point<Pixels>,
+    pub(super) resize_reveal_owned: bool,
 }
 
 impl PrepaintCaretGeometry {
@@ -137,6 +138,7 @@ impl PrepaintCaretGeometry {
             line_height,
             input_bounds,
             scroll_offset,
+            resize_reveal_owned: false,
         }
     }
 
@@ -2263,6 +2265,10 @@ impl<M: InputModeKind> InputBaseState<M> {
             return;
         }
         self.undo_manager.break_transaction_coalescing();
+        if !self.disabled {
+            self.focus(window, cx);
+            self.pause_blink_cursor(cx);
+        }
         // Input has its own text selection; suppress the window-level text
         // selection (Root) so it does not start a drag from here.
         crate::global_state::GlobalState::suppress_text_selection(cx);
@@ -2288,6 +2294,8 @@ impl<M: InputModeKind> InputBaseState<M> {
             }
         }
 
+        self.selected_word_range = None;
+        self.column_select_start = None;
         self.selecting = true;
         let (offset, line_end_affinity, columns_past_line_end) =
             self.resolve_mouse_position(event.position);
@@ -2362,6 +2370,8 @@ impl<M: InputModeKind> InputBaseState<M> {
         crate::global_state::GlobalState::suppress_text_selection(cx);
         M::clear_inline_completion(self, cx);
         self.dismiss_touch_selection(cx);
+        self.selected_word_range = None;
+        self.column_select_start = None;
         self.selecting = true;
 
         if event.modifiers.shift {
@@ -2399,11 +2409,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         cx: &mut Context<Self>,
     ) {
         // Check if mouse is within bounds
-        let within_bounds = self
-            .last_bounds
-            .as_ref()
-            .map(|bounds| bounds.contains(&event.position))
-            .unwrap_or(false);
+        let within_bounds = self.input_bounds.contains(&event.position);
 
         if !within_bounds {
             // Clear hover when mouse leaves the input
@@ -2533,10 +2539,10 @@ impl<M: InputModeKind> InputBaseState<M> {
         let row = point.row;
 
         // Resolve the wrapped row even when the target is outside the last layout.
-        let display_pos = self
+        let display_row = self
             .display_map
-            .buffer_pos_to_display_pos(crate::input::BufferPoint::new(row, point.column));
-        let row_offset_y = line_height * display_pos.row;
+            .offset_to_display_row(offset, self.line_end_affinity_at(offset));
+        let row_offset_y = line_height * display_row;
 
         // For Right alignment use 0 margin: the cursor indicator is clamped inside bounds
         // in layout_cursors, so shifting the text here would cause a first-click visual jump.
@@ -2577,15 +2583,15 @@ impl<M: InputModeKind> InputBaseState<M> {
                     line_height,
                 )
             } else {
-                line_height
+                px(0.)
             };
-        if row_offset_y - edge_height + line_height < -scroll_offset.y {
-            // Scroll up
-            scroll_offset.y = -row_offset_y + edge_height - line_height;
-        } else if row_offset_y + edge_height > -scroll_offset.y + bounds.size.height {
-            // Scroll down
-            scroll_offset.y = -(row_offset_y - bounds.size.height + edge_height);
-        }
+        scroll_offset.y = super::element::reveal_row(
+            scroll_offset.y,
+            row_offset_y,
+            line_height,
+            bounds.size.height,
+            edge_height,
+        );
 
         // Avoid necessary scroll, when it was already in the correct position.
         if direction == Some(MoveDirection::Up) {
@@ -3184,11 +3190,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         }
     }
 
-    fn extend_selection(
-        sel: &mut CursorSelection,
-        offset: usize,
-        word_range: Option<CursorSelection>,
-    ) {
+    fn extend_selection(sel: &mut CursorSelection, offset: usize) {
         if sel.reversed {
             sel.start = offset;
         } else {
@@ -3198,15 +3200,6 @@ impl<M: InputModeKind> InputBaseState<M> {
         if sel.end < sel.start {
             sel.reversed = !sel.reversed;
             std::mem::swap(&mut sel.start, &mut sel.end);
-        }
-
-        if let Some(word_range) = word_range {
-            if sel.start > word_range.start {
-                sel.start = word_range.start;
-            }
-            if sel.end < word_range.end {
-                sel.end = word_range.end;
-            }
         }
     }
 
@@ -3224,8 +3217,11 @@ impl<M: InputModeKind> InputBaseState<M> {
 
         self.cursor_line_end_affinity = line_end_affinity;
         let offset = self.cursor_boundary(offset, Bias::Left);
-        let word_range = self.selected_word_range;
-        Self::extend_selection(self.active_selection_mut(), offset, word_range);
+        if let Some(anchor) = self.selected_word_range {
+            self.select_word_to(offset, anchor);
+        } else {
+            Self::extend_selection(self.active_selection_mut(), offset);
+        }
         let range = self.normalize_token_range(self.selected_range());
         self.set_selection(range.start, range.end);
 
@@ -3264,7 +3260,7 @@ impl<M: InputModeKind> InputBaseState<M> {
                 }
                 let offset = self.cursor_boundary(offset, Bias::Left);
                 let mut new_sel = *sel;
-                Self::extend_selection(&mut new_sel, offset, None);
+                Self::extend_selection(&mut new_sel, offset);
                 let range = self.normalize_token_range(new_sel.start..new_sel.end);
                 new_sel.start = range.start;
                 new_sel.end = range.end;

@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { prepareSbom } from './prepare-sbom.mjs';
@@ -14,6 +16,8 @@ const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const containerfile = fileURLToPath(new URL('./Containerfile', import.meta.url));
 const image = 'localhost/gpui-json5-editor-builder:nightly';
 const volumes = ['gpui-json5-editor-cargo-target', 'gpui-json5-editor-cargo-registry', 'gpui-json5-editor-rustup'];
+const require = createRequire(new URL('../www/package.json', import.meta.url));
+const { parse: parseToml } = require('smol-toml');
 
 function available(command, args) {
   const result = spawnSync(command, args, { stdio: 'ignore' });
@@ -38,9 +42,18 @@ async function build() {
       + 'On Windows/macOS, Podman needs "podman machine init" (once) and "podman machine start". '
       + 'Docker Desktop must use Linux containers. Set CONTAINER_ENGINE to select an engine.');
   }
-  console.log(`Building WASM with ${engine} (${profile})`);
+  const cargoLock = parseToml(await readFile(resolve(root, 'Cargo.lock'), 'utf8'));
+  const versions = [...new Set(cargoLock.package.filter(pkg => pkg.name === 'wasm-bindgen')
+    .map(pkg => pkg.version))];
+  if (versions.length !== 1 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(versions[0])) {
+    throw new Error('Cargo.lock must resolve exactly one wasm-bindgen version so the CLI can match it. '
+      + 'Run cargo update to align the dependencies.');
+  }
+  const wasmBindgenVersion = versions[0];
+  console.log(`Building WASM with ${engine} (${profile}); wasm-bindgen CLI ${wasmBindgenVersion} from Cargo.lock`);
   await prepareSbom();
   run(engine, ['build', engine === 'podman' ? '--pull=always' : '--pull',
+    '--build-arg', `WASM_BINDGEN_VERSION=${wasmBindgenVersion}`,
     '--tag', image, '--file', containerfile, root]);
   for (const volume of volumes) {
     if (!available(engine, ['volume', 'inspect', volume])) run(engine, ['volume', 'create', volume]);

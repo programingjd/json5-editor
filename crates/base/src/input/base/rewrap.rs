@@ -86,6 +86,19 @@ impl<M: InputModeKind> InputBaseState<M> {
             return;
         }
         self.pending_rewrap = Some(request);
+        let reveal_caret = self.focus_handle.is_focused(window)
+            && self.prepaint_caret_geometry.is_some_and(|geometry| {
+                let caret = geometry.cursor_bounds();
+                let viewport = geometry.input_bounds();
+                let offset = self.scroll_handle.offset();
+                let top = caret.top() + offset.y;
+                let left = caret.left() + offset.x - geometry.scroll_offset().x;
+                (geometry.resize_reveal_owned && geometry.scroll_offset() == offset)
+                    || (top >= viewport.top()
+                        && top + caret.size.height <= viewport.bottom()
+                        && left >= viewport.left()
+                        && left + caret.size.width <= viewport.right())
+            });
         let epoch = self.rewrap_epoch;
         cx.notify();
         let executor = cx.background_executor().clone();
@@ -143,6 +156,30 @@ impl<M: InputModeKind> InputBaseState<M> {
                             let row = state.display_map.buffer_pos_to_display_pos(anchor).row;
                             state.deferred_scroll_offset =
                                 Some(point(offset.x, -height * (row as f32 + fraction)));
+                        }
+                        if reveal_caret && let Some(layout) = state.last_layout.as_ref() {
+                            let row = state.display_map.offset_to_display_row(
+                                state.cursor(),
+                                state.cursor_line_end_affinity,
+                            );
+                            let padding = super::element::cursor_surrounding_padding(
+                                state.mode.is_auto_grow(),
+                                state.cursor_surrounding_lines,
+                                super::element::viewport_visible_lines(
+                                    state.input_bounds.size.height,
+                                    layout.line_height,
+                                ),
+                                layout.line_height,
+                            );
+                            let mut offset = state.deferred_scroll_offset.unwrap_or(offset);
+                            offset.y = super::element::reveal_row(
+                                offset.y,
+                                layout.line_height * row,
+                                layout.line_height,
+                                state.input_bounds.size.height,
+                                padding,
+                            );
+                            state.deferred_scroll_offset = Some(offset);
                         }
                         state.mode.update_auto_grow(&state.display_map);
                         tracing::info!(

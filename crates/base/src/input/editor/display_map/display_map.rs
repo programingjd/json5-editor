@@ -326,6 +326,11 @@ impl DisplayMap {
 
     // ==================== Wrap Display Point Operations ====================
 
+    pub(crate) fn offset_to_display_row(&self, offset: usize, line_end_affinity: bool) -> usize {
+        let point = self.offset_to_wrap_display_point_with_affinity(offset, line_end_affinity);
+        self.nearest_visible_display_row(point.row)
+    }
+
     #[inline]
     pub(crate) fn offset_to_wrap_display_point(&self, offset: usize) -> WrapDisplayPoint {
         self.wrap_map.wrapper().offset_to_display_point(offset)

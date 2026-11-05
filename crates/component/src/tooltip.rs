@@ -1,9 +1,13 @@
 use crate::root::WindowState;
-use std::{cell::Cell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+    time::Duration,
+};
 
 use gpui::{
     Action, AnyElement, AnyView, App, AppContext, Bounds, Context, ElementId, FontWeight,
-    IntoElement, MouseButton, ParentElement, Pixels, Render, SharedString,
+    GlobalElementId, IntoElement, MouseButton, ParentElement, Pixels, Render, SharedString,
     StatefulInteractiveElement, StyleRefinement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 pub use gpui_base::TooltipDefaults;
@@ -225,6 +229,16 @@ impl ComponentTooltip {
 
 // ── Internal managed tooltip trait ──────────────────────────────────────────
 
+#[derive(Default)]
+struct TooltipLifetime(Rc<()>);
+
+#[derive(Default)]
+struct TooltipTrigger {
+    id: Option<GlobalElementId>,
+    lifetime: Weak<()>,
+    bounds: Bounds<Pixels>,
+}
+
 pub(crate) trait ManagedTooltipExt:
     StatefulInteractiveElement + crate::ElementExt + Sized
 {
@@ -235,19 +249,46 @@ pub(crate) trait ManagedTooltipExt:
         build_tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
     ) -> Self {
         let build_tooltip = Rc::new(build_tooltip);
-        let trigger_bounds_cell: Rc<Cell<Bounds<Pixels>>> = Rc::new(Cell::new(Bounds::default()));
-        let bounds_writer = trigger_bounds_cell.clone();
+        let trigger = Rc::new(RefCell::new(TooltipTrigger::default()));
+        let trigger_writer = trigger.clone();
 
-        self.on_prepaint(move |bounds, _, _| {
-            bounds_writer.set(bounds);
+        self.on_prepaint(move |bounds, window, _| {
+            let id = window.with_global_id("managed-tooltip-trigger".into(), |id, _| id.clone());
+            // GPUI retains keyed element state for cached subtrees too, and
+            // drops it after a frame that no longer contains the trigger.
+            let lifetime = window.with_element_state(&id, |state: Option<TooltipLifetime>, _| {
+                let state = state.unwrap_or_default();
+                (Rc::downgrade(&state.0), state)
+            });
+            *trigger_writer.borrow_mut() = TooltipTrigger {
+                id: Some(id),
+                lifetime,
+                bounds,
+            };
         })
         .on_hover({
-            let trigger_bounds_cell = trigger_bounds_cell.clone();
+            let trigger = trigger.clone();
             let build_tooltip = build_tooltip.clone();
             move |hovered, window, cx| {
-                if let Some(overlay) = WindowState::tooltip_overlay(window, cx) {
+                let trigger = trigger.borrow();
+                let Some(id) = trigger.id.as_ref() else {
+                    return;
+                };
+                let bounds = trigger.bounds;
+                // A press keeps the tooltip dismissed until the pointer leaves
+                // the trigger. This also drops the hover-enter that a click
+                // removing the trigger dispatches to the stale frame.
+                if *hovered && WindowState::is_tooltip_trigger_pressed(bounds, window, cx) {
+                    return;
+                }
+                if let Some(overlay) = WindowState::tooltip_overlay_for_trigger(
+                    id,
+                    trigger.lifetime.clone(),
+                    *hovered,
+                    window,
+                    cx,
+                ) {
                     if *hovered {
-                        let bounds = trigger_bounds_cell.get();
                         overlay.update(cx, |o: &mut BaseTooltipOverlay, cx| {
                             let build = build_tooltip.clone();
                             let request = BaseTooltipRequest::new(bounds, move |window, cx| {
@@ -272,6 +313,7 @@ pub(crate) trait ManagedTooltipExt:
             }
         })
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            WindowState::press_tooltip_trigger(trigger.borrow().bounds, window, cx);
             if let Some(overlay) = WindowState::tooltip_overlay(window, cx) {
                 overlay.update(cx, |overlay, cx| {
                     overlay.hide(cx);

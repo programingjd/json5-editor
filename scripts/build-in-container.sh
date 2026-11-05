@@ -11,6 +11,7 @@ esac
 rustup update nightly --no-self-update
 rustup target add wasm32-unknown-unknown --toolchain nightly
 wasm-opt --version
+wasm-bindgen --version
 
 build_module() {
     local package="$1" module="$2" output="$3"

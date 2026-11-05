@@ -151,10 +151,28 @@ impl<M: InputModeKind> InputBaseState<M> {
         case_insensitive: bool,
         cx: &mut Context<Self>,
     ) {
+        let query = query.into();
+        let query_changed = self.search_session.query != query
+            || self.search_session.case_insensitive != case_insensitive
+            || self.search_session.regex_mode;
         self.search_session.activate();
         self.search_session.update_query(query, case_insensitive);
         self.search_session.matcher.update(&self.text);
+        self.anchor_changed_search(query_changed);
         cx.notify();
+    }
+
+    fn anchor_changed_search(&mut self, query_changed: bool) {
+        self.search_session.anchor_offset = if query_changed {
+            self.last_layout
+                .as_ref()
+                .map(|layout| layout.visible_range_offset.start)
+        } else {
+            None
+        };
+        if let Some(anchor) = self.search_session.anchor_offset {
+            self.search_session.matcher.update_cursor_by_offset(anchor);
+        }
     }
 
     pub fn set_search_regex(
@@ -164,6 +182,9 @@ impl<M: InputModeKind> InputBaseState<M> {
         cx: &mut Context<Self>,
     ) -> Result<(), regex::Error> {
         let query = query.into();
+        let query_changed = self.search_session.query != query
+            || self.search_session.case_insensitive != case_insensitive
+            || !self.search_session.regex_mode;
         let compiled = if query.is_empty() {
             Ok(None)
         } else {
@@ -173,6 +194,13 @@ impl<M: InputModeKind> InputBaseState<M> {
                 .build()
                 .map(Some)
         };
+        if !query_changed {
+            self.search_session.activate();
+            self.search_session.matcher.update(&self.text);
+            self.anchor_changed_search(false);
+            cx.notify();
+            return compiled.map(|_| ());
+        }
         let session = &mut self.search_session;
         session.activate();
         session.query = query;
@@ -182,6 +210,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         session.matcher.regex_query = compiled.as_ref().ok().and_then(Clone::clone);
         session.matcher.text = self.text.clone();
         session.matcher.update_matches();
+        self.anchor_changed_search(query_changed);
         cx.notify();
         compiled.map(|_| ())
     }

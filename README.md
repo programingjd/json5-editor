@@ -37,6 +37,10 @@ container; no local Rust toolchain is needed for a normal build. The first build
 needs internet access and takes longer; named volumes cache the toolchain and
 compiled dependencies. The project directory is mounted to write the WASM output.
 
+The build selects the wasm-bindgen CLI version from `Cargo.lock`, keeping it
+matched to the Rust dependency. Builds use `--locked`; after updating Rust
+dependencies with `cargo update`, rebuild normally to use the matching CLI.
+
 ### Container setup
 
 The build automatically uses an available Podman engine, then Docker. To choose

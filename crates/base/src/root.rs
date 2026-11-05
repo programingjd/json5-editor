@@ -11,6 +11,30 @@ use std::{any::TypeId, rc::Rc};
 actions!(root, [Tab, TabPrev]);
 const CONTEXT: &str = "Root";
 
+fn advance_focus(window: &mut Window, cx: &mut App, advance: fn(&mut Window, &mut App)) {
+    let Some(container) = crate::active_focus_trap(window, cx) else {
+        advance(window, cx);
+        return;
+    };
+
+    advance(window, cx);
+    // GPUI's tab order can cycle short of the whole window (a stop whose
+    // previous stop is itself), so the walk ends at the first repeated stop,
+    // not only on a return to the one it began with.
+    let mut visited = Vec::new();
+    while !container.contains_focused(window, cx) {
+        let focused = window.focused(cx);
+        if visited.contains(&focused) {
+            // No tab stop in the trap is reachable. Its own handle remains a
+            // safe focus target even when excluded from ordinary tab order.
+            container.focus(window, cx);
+            break;
+        }
+        visited.push(focused);
+        advance(window, cx);
+    }
+}
+
 pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("tab", Tab, Some(CONTEXT)),
@@ -151,73 +175,11 @@ impl Root {
         root.update(cx, |root, cx| f(root, window, cx))
     }
     fn on_action_tab(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
-        // Check if we're inside a focus trap
-        if let Some(container_focus_handle) = crate::active_focus_trap(window, cx) {
-            // We're in a focus trap - try to focus next, then check if we're still inside
-            let before_focus = window.focused(cx);
-
-            // Try normal focus navigation
-            window.focus_next(cx);
-
-            // Check if we're still in the trap
-            if !container_focus_handle.contains_focused(window, cx) {
-                // We jumped out of the trap - need to cycle back to the beginning
-                // Find the first focusable element in the trap by continuing to focus_next
-                let mut attempts = 0;
-                const MAX_ATTEMPTS: usize = 100; // Prevent infinite loop
-
-                while !container_focus_handle.contains_focused(window, cx)
-                    && attempts < MAX_ATTEMPTS
-                {
-                    window.focus_next(cx);
-                    attempts += 1;
-
-                    // If we cycled back to where we started, restore original focus
-                    if window.focused(cx) == before_focus {
-                        break;
-                    }
-                }
-            }
-            return;
-        }
-
-        // Normal tab navigation
-        window.focus_next(cx);
+        advance_focus(window, cx, Window::focus_next);
     }
 
     fn on_action_tab_prev(&mut self, _: &TabPrev, window: &mut Window, cx: &mut Context<Self>) {
-        // Check if we're inside a focus trap
-        if let Some(container_focus_handle) = crate::active_focus_trap(window, cx) {
-            // We're in a focus trap - try to focus previous, then check if we're still inside
-            let before_focus = window.focused(cx);
-
-            // Try normal focus navigation
-            window.focus_prev(cx);
-
-            // Check if we're still in the trap
-            if !container_focus_handle.contains_focused(window, cx) {
-                // We jumped out of the trap - need to cycle back to the end
-                // Find the last focusable element in the trap by continuing to focus_prev
-                let mut attempts = 0;
-                const MAX_ATTEMPTS: usize = 100; // Prevent infinite loop
-
-                while !container_focus_handle.contains_focused(window, cx)
-                    && attempts < MAX_ATTEMPTS
-                {
-                    window.focus_prev(cx);
-                    attempts += 1;
-
-                    // If we cycled back to where we started, restore original focus
-                    if window.focused(cx) == before_focus {
-                        break;
-                    }
-                }
-            }
-            return;
-        }
-
-        // Normal tab navigation
-        window.focus_prev(cx);
+        advance_focus(window, cx, Window::focus_prev);
     }
 
     fn on_action_copy(&mut self, _: &Copy, window: &mut Window, cx: &mut Context<Self>) {

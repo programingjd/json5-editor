@@ -51,16 +51,25 @@ impl FocusTrapManager {
     }
 
     fn find_active_trap(window: &Window, cx: &App) -> Option<FocusHandle> {
-        for (_id, container_handle) in Self::global(cx).traps.iter() {
+        let mut active: Option<FocusHandle> = None;
+        for container_handle in Self::global(cx).traps.values() {
             let Some(container) = container_handle.upgrade() else {
                 continue;
             };
 
-            if container.contains_focused(window, cx) {
-                return Some(container.clone());
+            if container.contains_focused(window, cx)
+                && active
+                    .as_ref()
+                    .is_none_or(|current| current.contains(&container, window))
+            {
+                // A child scope must confine navigation even if its ancestor
+                // was registered first (or visited first by the HashMap).
+                // Use the rendered focus tree so closing and reopening a
+                // retained scope cannot leave registration order in control.
+                active = Some(container);
             }
         }
-        None
+        active
     }
 
     fn cleanup(&mut self) {
@@ -135,6 +144,22 @@ impl<E: InteractiveElement + ParentElement + Styled + Element + 'static> Element
 
     fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
         None
+    }
+
+    fn a11y_role(&self) -> Option<gpui::Role> {
+        self.base.a11y_role()
+    }
+
+    fn write_a11y_info(&self, node: &mut gpui::accesskit::Node) {
+        self.base.write_a11y_info(node);
+    }
+
+    fn a11y_synthetic_children(
+        &mut self,
+        prepaint: &mut Self::PrepaintState,
+        builder: &mut gpui::A11ySubtreeBuilder,
+    ) {
+        self.base.a11y_synthetic_children(prepaint, builder);
     }
 
     fn request_layout(

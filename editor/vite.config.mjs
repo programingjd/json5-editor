@@ -21,6 +21,11 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
   const iconsPath = asset('assets/icons');
   const componentIcons = readFileSync(asset('crates/assets/default-icons.txt'), 'utf8')
     .trim().split(/\r?\n/).map(file => path.posix.basename(file));
+  const pageAssets = [
+    ['initial-theme.js', initialTheme],
+    ['LICENSE-APACHE', asset('LICENSE-APACHE')],
+    ['NOTICE', asset('NOTICE')],
+  ];
 
   return {
     root: editorRoot,
@@ -28,15 +33,19 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
     resolve: { alias: { '/app-entry.js': path.join(appRoot, 'src/main.js') } },
     plugins: [
       {
-        name: 'initial-editor-theme',
+        name: 'editor-page-assets',
         configureServer(server) {
-          server.middlewares.use('/initial-theme.js', (_, response) => {
-            response.setHeader('Content-Type', 'text/javascript');
-            response.end(readFileSync(initialTheme));
-          });
+          for (const [fileName, source] of pageAssets) {
+            server.middlewares.use(`/${fileName}`, (_, response) => {
+              response.setHeader('Content-Type', fileName.endsWith('.js') ? 'text/javascript' : 'text/plain; charset=utf-8');
+              response.end(readFileSync(source));
+            });
+          }
         },
         generateBundle() {
-          this.emitFile({ type: 'asset', fileName: 'initial-theme.js', source: readFileSync(initialTheme) });
+          for (const [fileName, source] of pageAssets) {
+            this.emitFile({ type: 'asset', fileName, source: readFileSync(source) });
+          }
         },
       },
       wasmCsp(),
@@ -46,16 +55,19 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
       wasm(),
       viteStaticCopy({
         targets: [
-          { src: asset('LICENSE-APACHE'), dest: '.' },
           ...componentIcons.map(file => ({ src: `${iconsPath}/${file}`, dest: 'assets/icons' })),
           { src: asset('assets/icons/LICENSE-APACHE'), dest: 'assets/icons' },
           { src: asset('assets/icons.json'), dest: 'assets' },
-          { src: asset('NOTICE'), dest: '.' },
           { src: asset('assets/icons/README.md'), dest: 'assets/icons' },
           { src: asset('assets/fonts/OFL.txt'), dest: 'assets/fonts' },
           { src: asset('assets/fonts/README.md'), dest: 'assets/fonts' },
           { src: asset('assets/DEPENDENCY-LICENSES.zip'), dest: 'assets' },
-        ],
+        ].map(target => ({
+          ...target,
+          // Relative glob paths retain forward slashes for v4's directory stripping on Windows.
+          src: path.relative(editorRoot, target.src).replaceAll('\\', '/'),
+          rename: { stripBase: true },
+        })),
       }),
       {
         name: 'serve-kit-icons',

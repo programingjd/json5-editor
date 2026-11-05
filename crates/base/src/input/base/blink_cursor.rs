@@ -29,7 +29,12 @@ impl BlinkCursor {
     }
 
     pub(crate) fn start(&mut self, cx: &mut Context<Self>) {
-        self.blink(self.epoch, cx);
+        // Focus and its observer may both start the cycle. Always restart
+        // visibly instead of toggling a caret that has just been shown off.
+        self.paused = false;
+        self.visible = false;
+        let epoch = self.next_epoch();
+        self.blink(epoch, cx);
     }
 
     pub(crate) fn stop(&mut self, cx: &mut Context<Self>) {

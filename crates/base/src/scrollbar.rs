@@ -1504,7 +1504,6 @@ impl Element for Scrollbar {
                         radius = px(0.);
                     }
                     radius = clamp_thumb_radius(radius, state.thumb_fill_bounds);
-                    let bounds = state.bounds;
                     let thumb_bounds = state.thumb_bounds;
                     let geometry = state.geometry;
                     let active_geometry = state.active_geometry;
@@ -1624,11 +1623,12 @@ impl Element for Scrollbar {
 
                     if is_visible || self.track_clickable_when_hidden {
                         window.on_mouse_event({
+                            let bar_hitbox = state.bar_hitbox.clone();
                             let state = scrollbar_state.clone();
                             let scroll_handle = self.scroll_handle.clone();
 
-                            move |event: &MouseDownEvent, phase, _, cx| {
-                                if phase.bubble() && bounds.contains(&event.position) {
+                            move |event: &MouseDownEvent, phase, window, cx| {
+                                if phase.bubble() && bar_hitbox.is_hovered(window) {
                                     cx.stop_propagation();
 
                                     if is_visible && thumb_bounds.contains(&event.position) {
@@ -1665,6 +1665,7 @@ impl Element for Scrollbar {
                     }
 
                     window.on_mouse_event({
+                        let bar_hitbox = state.bar_hitbox.clone();
                         let scroll_handle = self.scroll_handle.clone();
                         let state = scrollbar_state.clone();
                         let max_fps_duration = Duration::from_secs_f64(1. / self.max_fps as f64);
@@ -1675,7 +1676,8 @@ impl Element for Scrollbar {
                             // we need to update the hovered state and increase the last_scroll_time.
                             let need_hover_to_update = is_hover_to_show || is_visible;
                             // Update hovered state for scrollbar
-                            if bounds.contains(&event.position) && need_hover_to_update {
+                            let bar_hovered = bar_hitbox.is_hovered(window);
+                            if bar_hovered && need_hover_to_update {
                                 let hover_changed = state.get().hovered_axis != Some(axis);
                                 state.set(state.get().with_hovered(Some(axis), Instant::now()));
                                 notify |= hover_changed;
@@ -1686,6 +1688,7 @@ impl Element for Scrollbar {
 
                             // Update hovered state for scrollbar thumb
                             if tracks_thumb_hover(mode, is_visible)
+                                && bar_hovered
                                 && thumb_bounds.contains(&event.position)
                             {
                                 if state.get().hovered_on_thumb != Some(axis) {

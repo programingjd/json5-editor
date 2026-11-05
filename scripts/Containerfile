@@ -4,7 +4,8 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends clang llvm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN cargo install wasm-bindgen-cli --version 0.2.121 --locked
+ARG WASM_BINDGEN_VERSION
+RUN cargo install wasm-bindgen-cli --version "=${WASM_BINDGEN_VERSION:?Pass WASM_BINDGEN_VERSION from Cargo.lock}" --locked
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends binaryen \
