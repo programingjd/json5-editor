@@ -292,6 +292,7 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(crate) extras: M::Extras,
     pub(super) focus_handle: FocusHandle,
     selection_focus: Option<WeakFocusHandle>,
+    context_menu_selection_focus: Option<WeakFocusHandle>,
     pub(super) mode: LayoutMode,
     pub(super) text: Rope,
     pub(super) display_map: DisplayMap,
@@ -585,6 +586,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         self.context_menu_handler = Some(handler);
     }
 
+    /// Keeps the selection visible while focus is inside a related control.
     pub fn set_selection_focus(&mut self, focus: Option<FocusHandle>, cx: &mut Context<Self>) {
         self.selection_focus = focus.as_ref().map(FocusHandle::downgrade);
         cx.notify();
@@ -592,11 +594,14 @@ impl<M: InputModeKind> InputBaseState<M> {
 
     pub fn has_selection_focus(&self, window: &Window, cx: &App) -> bool {
         self.focus_handle.is_focused(window)
-            || self
-                .selection_focus
-                .as_ref()
-                .and_then(WeakFocusHandle::upgrade)
-                .is_some_and(|focus| focus.is_focused(window) || focus.contains_focused(window, cx))
+            || [
+                self.selection_focus.as_ref(),
+                self.context_menu_selection_focus.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            .filter_map(WeakFocusHandle::upgrade)
+            .any(|focus| focus.is_focused(window) || focus.contains_focused(window, cx))
     }
 
     fn new_in_mode(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -643,6 +648,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             extras: M::Extras::default(),
             focus_handle: focus_handle.clone(),
             selection_focus: None,
+            context_menu_selection_focus: None,
             text: "".into(),
             display_map: DisplayMap::new(text_style.font(), window.rem_size(), None),
             search_session: super::SearchSession::default(),
@@ -2019,7 +2025,8 @@ impl<M: InputModeKind> InputBaseState<M> {
                 let menu_focus = window.focused(cx).filter(|focus| {
                     Some(focus) != previous_focus.as_ref() && *focus != this.focus_handle
                 });
-                this.set_selection_focus(menu_focus, cx);
+                this.context_menu_selection_focus = menu_focus.as_ref().map(FocusHandle::downgrade);
+                cx.notify();
             });
         }
     }

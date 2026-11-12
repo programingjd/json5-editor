@@ -10,14 +10,15 @@ use gpui_kit::component::{
     menu::{DropdownMenu as _, PopupMenuItem},
 };
 use gpui_kit::{
-    App, AppContext as _, Context, Empty, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    App, AppContext as _, Context, Empty, Entity, FocusHandle, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
     prelude::FluentBuilder as _, relative,
 };
 use std::ops::Range;
 
 pub(super) struct EditorSearchPanel {
     editor: Entity<EditorState>,
+    focus_handle: FocusHandle,
     input: Entity<TextareaState>,
     replacement: Entity<TextareaState>,
     visible: bool,
@@ -53,8 +54,13 @@ impl EditorSearchPanel {
                 .auto_grow(1, 6)
                 .placeholder("Replace")
         });
+        let focus_handle = cx.focus_handle();
+        editor.update(cx, |editor, cx| {
+            editor.set_selection_focus(Some(focus_handle.clone()), cx);
+        });
         cx.new(|cx: &mut Context<Self>| Self {
             editor: editor.clone(),
+            focus_handle,
             input: input.clone(),
             replacement: replacement.clone(),
             visible: false,
@@ -696,6 +702,7 @@ impl Render for EditorSearchPanel {
         }
         let owner = cx.weak_entity();
         div()
+            .track_focus(&self.focus_handle)
             .flex()
             .flex_none()
             .w_full()
