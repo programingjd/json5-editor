@@ -1,8 +1,5 @@
 use crate::{highlighter::HighlightTheme, list::ListSettings, scroll::ScrollbarMode};
-use gpui::{
-    App, Global, Hsla, IsZero as _, Pixels, SharedString, Window, WindowAppearance,
-    prelude::FluentBuilder as _, px,
-};
+use gpui::{App, Global, Hsla, IsZero as _, Pixels, SharedString, Window, WindowAppearance, px};
 pub use gpui_base::{
     ColorTokens, RadiusTokens, SemanticThemeTokens, ShadowTokens, SpacingTokens, TextStyleToken,
     TypographyTokens,
@@ -62,16 +59,6 @@ const SCROLLBAR_ENTER: Duration = Duration::from_millis(300);
 const SCROLLBAR_EXIT: Duration = Duration::from_millis(500);
 
 const SCROLLBAR_EXPAND: Duration = Duration::from_millis(300);
-
-const MOBILE_SCROLLBAR_THUMB_WIDTH: Pixels = px(3.);
-
-const MOBILE_SCROLLBAR_THUMB_INSET: Pixels = px(2.);
-
-const SCROLLBAR_THUMB_HOVER_WIDTH: Pixels = px(6.);
-
-const SCROLLBAR_THUMB_ACTIVE_WIDTH: Pixels = px(8.);
-
-const SCROLLBAR_THUMB_INSET: Pixels = px(4.);
 
 fn scrollbar_motion(mode: ScrollbarMode) -> gpui_base::ScrollbarMotion {
     gpui_base::ScrollbarMotion::default()
@@ -266,36 +253,16 @@ impl Theme {
                         .track(|style| style.bg(self.scrollbar))
                         .track_hover(|style| style.bg(self.scrollbar))
                         .track_active(|style| style.bg(self.scrollbar).border_color(self.border))
-                        .thumb(|style| {
-                            style
-                                .bg(self.tokens.scrollbar_thumb)
-                                .radius(self.radius)
-                                .when(gpui_base::is_mobile(), |style| {
-                                    style
-                                        .width(MOBILE_SCROLLBAR_THUMB_WIDTH)
-                                        .inset(MOBILE_SCROLLBAR_THUMB_INSET)
-                                        .radius(RADIUS_FULL)
-                                })
-                        })
+                        .thumb(|style| style.bg(self.tokens.scrollbar_thumb).radius(self.radius))
                         .thumb_hover(|style| {
                             style
                                 .bg(self.tokens.scrollbar_thumb_hover)
                                 .radius(self.radius)
-                                .when(gpui_base::is_mobile(), |style| {
-                                    style
-                                        .width(SCROLLBAR_THUMB_HOVER_WIDTH)
-                                        .inset(SCROLLBAR_THUMB_INSET)
-                                })
                         })
                         .thumb_active(|style| {
                             style
                                 .bg(self.tokens.scrollbar_thumb_hover)
                                 .radius(self.radius)
-                                .when(gpui_base::is_mobile(), |style| {
-                                    style
-                                        .width(SCROLLBAR_THUMB_ACTIVE_WIDTH)
-                                        .inset(SCROLLBAR_THUMB_INSET)
-                                })
                         }),
                 ),
             resizable: gpui_base::ResizableTheme {

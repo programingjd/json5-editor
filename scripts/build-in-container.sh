@@ -16,7 +16,7 @@ wasm-bindgen --version
 build_module() {
     local package="$1" module="$2" output="$3"
     cargo +nightly rustc --locked --profile "$BUILD_PROFILE" \
-        -p "$package" --target wasm32-unknown-unknown \
+        -p "$package" \
         -- -C link-arg=-zstack-size=8388608
     wasm-bindgen "/target/wasm32-unknown-unknown/$ARTIFACT_DIRECTORY/$module.wasm" \
         --out-dir "$output" --target web --no-typescript
@@ -34,4 +34,4 @@ build_module() {
 build_module json5-web-editor gpui_json5_editor_web /workspace/standalone/editor/src/wasm
 build_module gpui-json5-processor gpui_json5_processor /workspace/standalone/editor/src/worker-wasm
 
-cargo +nightly run --locked --manifest-path /workspace/standalone/tools/sbom/Cargo.toml -- /workspace/standalone
+cargo +nightly run --locked --target host-tuple --manifest-path /workspace/standalone/tools/sbom/Cargo.toml -- /workspace/standalone

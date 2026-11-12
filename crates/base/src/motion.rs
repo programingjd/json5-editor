@@ -1,7 +1,4 @@
-#[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
 use std::{rc::Rc, time::Duration};
-#[cfg(target_family = "wasm")]
 use web_time::Instant;
 
 use gpui::{

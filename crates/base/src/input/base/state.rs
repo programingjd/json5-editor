@@ -21,8 +21,8 @@ use unicode_segmentation::*;
 
 use super::{
     DiagnosticSet, DisplayMap, InputContextMenuCapabilities, InputEditorStyle,
-    InputHighlighterFactory, InputScrollbarRenderer, MASK_CHAR, MaskPattern, NativeMenu,
-    NumberStep, WrappingIndent,
+    InputHighlighterFactory, InputScrollbarRenderer, MASK_CHAR, MaskPattern, NumberStep,
+    WrappingIndent,
     blink_cursor::BlinkCursor,
     change::Change,
     cursor::{CursorSelection, Selections},
@@ -97,7 +97,6 @@ actions!(
         SelectToEnd,
         SelectToPreviousWordStart,
         SelectToNextWordEnd,
-        ShowCharacterPalette,
         Copy,
         Cut,
         Paste,
@@ -196,21 +195,9 @@ pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("backspace", Backspace, Some(CONTEXT)),
         KeyBinding::new("shift-backspace", Backspace, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-backspace", Backspace, Some(CONTEXT)),
         KeyBinding::new("delete", Delete, Some(CONTEXT)),
         KeyBinding::new("shift-delete", Delete, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-backspace", DeleteToBeginningOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-delete", DeleteToEndOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("alt-backspace", DeleteToPreviousWordStart, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-backspace", DeleteToPreviousWordStart, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("alt-delete", DeleteToNextWordEnd, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-delete", DeleteToNextWordEnd, Some(CONTEXT)),
         KeyBinding::new(
             "enter",
@@ -245,120 +232,35 @@ pub(crate) fn init(cx: &mut App) {
         KeyBinding::new("pagedown", MovePageDown, Some(CONTEXT)),
         KeyBinding::new("tab", IndentInline, Some(CONTEXT)),
         KeyBinding::new("shift-tab", OutdentInline, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-]", Indent, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-]", Indent, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-[", Outdent, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-[", Outdent, Some(CONTEXT)),
         KeyBinding::new("shift-left", SelectLeft, Some(CONTEXT)),
         KeyBinding::new("shift-right", SelectRight, Some(CONTEXT)),
         KeyBinding::new("shift-up", SelectUp, Some(CONTEXT)),
         KeyBinding::new("shift-down", SelectDown, Some(CONTEXT)),
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         KeyBinding::new("shift-alt-left", SelectLeft, Some(CONTEXT)),
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         KeyBinding::new("shift-alt-right", SelectRight, Some(CONTEXT)),
-        // Avoid Ctrl+Alt+arrows on Linux, where desktops may reserve them.
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-alt-up", AddCursorAbove, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-alt-down", AddCursorBelow, Some(CONTEXT)),
-        #[cfg(target_os = "windows")]
-        KeyBinding::new("ctrl-alt-up", AddCursorAbove, Some(CONTEXT)),
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         KeyBinding::new("shift-alt-up", AddCursorAbove, Some(CONTEXT)),
-        #[cfg(target_os = "windows")]
-        KeyBinding::new("ctrl-alt-down", AddCursorBelow, Some(CONTEXT)),
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         KeyBinding::new("shift-alt-down", AddCursorBelow, Some(CONTEXT)),
         KeyBinding::new("home", MoveHome, Some(CONTEXT)),
         KeyBinding::new("end", MoveEnd, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-home", MoveToStart, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-end", MoveToEnd, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-home", SelectToStart, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-end", SelectToEnd, Some(CONTEXT)),
         KeyBinding::new("shift-home", SelectToStartOfLine, Some(CONTEXT)),
         KeyBinding::new("shift-end", SelectToEndOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-shift-a", SelectToStartOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-shift-e", SelectToEndOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("shift-cmd-left", SelectToStartOfLine, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("shift-cmd-right", SelectToEndOfLine, Some(CONTEXT)),
-        #[cfg(any(target_os = "macos", target_os = "linux"))]
-        KeyBinding::new("alt-shift-left", SelectToPreviousWordStart, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-left", SelectToPreviousWordStart, Some(CONTEXT)),
-        #[cfg(any(target_os = "macos", target_os = "linux"))]
-        KeyBinding::new("alt-shift-right", SelectToNextWordEnd, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-right", SelectToNextWordEnd, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-a", SelectAll, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-a", SelectAll, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-c", Copy, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-c", Copy, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-x", Cut, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-x", Cut, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-v", Paste, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-v", Paste, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-a", MoveHome, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-left", MoveHome, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("ctrl-e", MoveEnd, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-right", MoveEnd, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-z", Undo, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-shift-z", Redo, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-up", MoveToStart, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-down", MoveToEnd, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("alt-left", MoveToPreviousWord, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("alt-right", MoveToNextWord, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-left", MoveToPreviousWord, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-right", MoveToNextWord, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-shift-up", SelectToStart, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-shift-down", SelectToEnd, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-z", Undo, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-y", Redo, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-f", Search, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-f", Search, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-shift-f", Replace, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-h", Replace, Some(CONTEXT)),
     ]);
 }
@@ -489,9 +391,8 @@ pub struct InputBaseState<M: InputModeKind> {
 
     pub(super) diagnostic_popover: Option<Rc<crate::input::DiagnosticEntry>>,
 
-    context_menu_handler: Option<
-        Rc<dyn Fn(NativeMenu, InputContextMenuCapabilities, Point<Pixels>, &mut Window, &mut App)>,
-    >,
+    context_menu_handler:
+        Option<Rc<dyn Fn(InputContextMenuCapabilities, Point<Pixels>, &mut Window, &mut App)>>,
     pending_context_menu: Option<(Point<Pixels>, usize)>,
 
     pub(super) enable_context_menu: bool,
@@ -679,9 +580,7 @@ impl<M: InputModeKind> InputBaseState<M> {
 
     pub fn on_context_menu(
         &mut self,
-        handler: Rc<
-            dyn Fn(NativeMenu, InputContextMenuCapabilities, Point<Pixels>, &mut Window, &mut App),
-        >,
+        handler: Rc<dyn Fn(InputContextMenuCapabilities, Point<Pixels>, &mut Window, &mut App)>,
     ) {
         self.context_menu_handler = Some(handler);
     }
@@ -2107,9 +2006,8 @@ impl<M: InputModeKind> InputBaseState<M> {
             let capabilities = self.context_menu_capabilities();
             cx.defer_in(window, move |this, window, cx| {
                 let previous_focus = window.focused(cx);
-                handler(NativeMenu::new(), capabilities, position, window, cx);
-                // A drawn menu takes focus synchronously; native menus leave it
-                // on the input. Capture it here, while the input is already
+                handler(capabilities, position, window, cx);
+                // Capture menu focus while the input is already
                 // borrowed, rather than re-entering the state from its handler.
                 if window.focused(cx) == previous_focus
                     && !this.focus_handle.is_focused(window)
@@ -2333,9 +2231,7 @@ impl<M: InputModeKind> InputBaseState<M> {
 
         // Multi-cursor placement, multi-line only.
         if self.is_multi_line() && event.button == MouseButton::Left {
-            if event.modifiers.alt
-                && (event.modifiers.shift || (cfg!(target_os = "linux") && event.modifiers.control))
-            {
+            if event.modifiers.alt && event.modifiers.shift {
                 // Alt+Shift starts a block; Linux also accepts Ghostty's Ctrl+Alt.
                 // Mark selecting so the drag handler extends the block.
                 self.column_select_start = Some(ColumnarPoint::new(offset, columns_past_line_end));
@@ -2611,15 +2507,6 @@ impl<M: InputModeKind> InputBaseState<M> {
         scroll_offset.y = scroll_offset.y.clamp(safe_y_min, px(0.));
         self.deferred_scroll_offset = Some(scroll_offset);
         cx.notify();
-    }
-
-    pub(super) fn show_character_palette(
-        &mut self,
-        _: &ShowCharacterPalette,
-        window: &mut Window,
-        _: &mut Context<Self>,
-    ) {
-        window.show_character_palette();
     }
 
     fn selected_texts(&self) -> Vec<String> {
@@ -4581,7 +4468,6 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
             .on_action(window.listener_for(&entity, InputBaseState::move_to_next_word))
             .on_action(window.listener_for(&entity, InputBaseState::select_to_start))
             .on_action(window.listener_for(&entity, InputBaseState::select_to_end))
-            .on_action(window.listener_for(&entity, InputBaseState::show_character_palette))
             .on_action({
                 let entity = entity.clone();
                 move |_: &ActivateToken, window, cx| {

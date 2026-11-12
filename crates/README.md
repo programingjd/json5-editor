@@ -12,7 +12,7 @@ focus traps and element bounds.
 Measured wrapping reuse is integrated into the editor's cancellable layout jobs.
 The GPUI engine remains at 0.3.8; these backports do not constitute a framework upgrade.
 
-- `kit`: application imports, pinned GPUI/platform re-exports, initialization and window creation.
+- `kit`: application imports, pinned GPUI and web backend re-exports, initialization and window creation.
 - `base`: text editing, source/display positions, folding, selection, undo, search,
   scrollbars, focus, popup geometry, motion and text rendering used by diagnostics.
 - `component`: editor/input presentation, toolbar/status bar, buttons, checkboxes,
@@ -24,6 +24,6 @@ content and document worker. JSON5 analysis uses `worker/` and `grammar/`;
 the main editor does not bundle the framework's native syntax parsers.
 Unused component families, gallery/examples, upstream tests and their fixtures,
 the component macros crate and unused icons are excluded.
-Context menus use the browser's GPUI-rendered popup overlay in
-`component/src/context_menu.rs`; Windows/macOS native-menu backends are excluded.
+The crates target `wasm32-unknown-unknown`. Context menus use the browser's
+GPUI-rendered popup overlay in `component/src/context_menu.rs`.
 

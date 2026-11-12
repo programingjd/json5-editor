@@ -1,16 +1,13 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use gpui::{
     App, Axis, BorderStyle, Bounds, ContentMask, Edges, Element, ElementId, GlobalElementId,
-    Hitbox, Hsla, InteractiveElement as _, IntoElement, IsZero as _, LayoutId, OngoingScroll,
-    PaintQuad, ParentElement as _, Point, Position, ScrollHandle, ScrollWheelEvent,
+    Hitbox, Hsla, InteractiveElement as _, IntoElement, IsZero as _, LayoutId, PaintQuad,
+    ParentElement as _, Point, Position, ScrollHandle, ScrollWheelEvent,
     StatefulInteractiveElement as _, Style, StyleRefinement, Styled as _, Window, div, px,
     relative,
 };
 use gpui::{Corners, Pixels};
 
-use crate::{AxisExt, OngoingScrollExt as _, ScrollbarHandle, StyledExt as _};
+use crate::{AxisExt, ScrollbarHandle, StyledExt as _};
 
 #[inline]
 #[track_caller]
@@ -341,7 +338,7 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
 
     fn paint(
         &mut self,
-        global_id: Option<&GlobalElementId>,
+        _: Option<&GlobalElementId>,
         _: Option<&gpui::InspectorElementId>,
         _: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
@@ -352,15 +349,6 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
         let is_horizontal = self.axis.is_horizontal();
         let line_height = window.line_height();
         let bounds = hitbox.bounds;
-        let ongoing_scroll = global_id
-            .map(|global_id| {
-                window.with_element_state::<Rc<RefCell<OngoingScroll>>, _>(global_id, |state, _| {
-                    let state = state.unwrap_or_default();
-                    (state.clone(), state)
-                })
-            })
-            .unwrap_or_default();
-
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             if let Some(color) = self.debug {
                 window.paint_quad(PaintQuad {
@@ -377,7 +365,6 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
                 let view_id = window.current_view();
                 let scroll_handle = self.scroll_handle.clone();
                 let hitbox_id = hitbox.id;
-                let ongoing_scroll = ongoing_scroll.clone();
 
                 move |event: &ScrollWheelEvent, phase, window, cx| {
                     // Handle in the capture phase: ancestor scrollers such as
@@ -396,15 +383,6 @@ impl<H: ScrollbarHandle + Clone> Element for ScrollableMask<H> {
 
                     let mut offset = scroll_handle.offset();
                     let mut delta = event.delta.pixel_delta(line_height);
-
-                    // Lock the gesture to the axis it started on, so a diagonal
-                    // trackpad swipe cannot flip which mask consumes it from one
-                    // event to the next. Line deltas carry no touch phase.
-                    if event.delta.precise() {
-                        ongoing_scroll
-                            .borrow_mut()
-                            .lock_axis(&mut delta, event.touch_phase);
-                    }
 
                     // Limit for only one way scrolling at same time.
                     // When use MacBook touchpad we may get both x and y delta,

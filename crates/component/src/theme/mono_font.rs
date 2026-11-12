@@ -16,13 +16,7 @@ use gpui::{App, SharedString};
 use gpui_base::TypographyTokens;
 use std::sync::OnceLock;
 
-const MONO_FONT_ALTERNATES: &[&str] = if cfg!(target_os = "macos") {
-    &["Monaco", "Courier New"]
-} else if cfg!(target_os = "windows") {
-    &["Cascadia Mono", "Courier New"]
-} else {
-    &["Noto Sans Mono", "Liberation Mono", "Ubuntu Mono"]
-};
+const MONO_FONT_ALTERNATES: &[&str] = &["Noto Sans Mono", "Liberation Mono", "Ubuntu Mono"];
 
 const SYSTEM_UI_FONT: &str = ".SystemUIFont";
 

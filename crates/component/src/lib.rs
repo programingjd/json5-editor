@@ -1,6 +1,3 @@
-#[cfg(feature = "gpui-fast")]
-extern crate gpui_fast as gpui;
-
 use gpui::App;
 use std::ops::Deref;
 
@@ -22,6 +19,7 @@ pub(crate) mod actions {
 
 pub mod button;
 pub mod checkbox;
+pub mod context_menu;
 pub mod empty;
 pub mod highlighter;
 pub mod history;
@@ -31,7 +29,6 @@ pub mod label;
 pub mod link;
 pub mod list;
 pub mod menu;
-pub mod context_menu;
 pub mod popover;
 pub mod scroll;
 pub mod separator;
@@ -49,8 +46,8 @@ pub use global_state::GlobalState;
 pub use gpui_base::Root;
 pub use gpui_base::animation;
 pub use gpui_base::{
-    AxisExt, Edges, FocusTrapElement, InteractiveElementExt, LengthExt, Measure, OngoingScrollExt,
-    Placement, Side, measure, measure_if,
+    AxisExt, Edges, FocusTrapElement, InteractiveElementExt, LengthExt, Measure, Placement, Side,
+    measure, measure_if,
 };
 pub use icon::*;
 pub use index_path::IndexPath;

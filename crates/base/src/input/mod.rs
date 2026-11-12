@@ -58,8 +58,6 @@ mod mask_pattern;
 mod mode;
 #[path = "base/movement.rs"]
 mod movement;
-#[path = "base/native.rs"]
-mod native;
 #[path = "base/preparation.rs"]
 mod preparation;
 #[path = "base/rewrap.rs"]
@@ -117,10 +115,6 @@ pub use lsp::{
 };
 pub use lsp_types::Position;
 pub use mask_pattern::MaskPattern;
-#[cfg(target_os = "macos")]
-#[doc(hidden)]
-pub use native::set_text_content_type;
-pub use native::{NativeMenu, NativeMenuItem};
 pub use rope_ext::{InputEdit, Point, RopeExt, RopeLines};
 pub use ropey::Rope;
 pub use scrollbar_presentation::{InputScrollbarContext, InputScrollbarRenderer};

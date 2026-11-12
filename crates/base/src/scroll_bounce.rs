@@ -1,15 +1,12 @@
 //! Boundary displacement only: the list keeps its clamped logical position.
 
-use crate::{OngoingScrollExt as _, ScrollbarHandle};
+use crate::ScrollbarHandle;
 use gpui::{
     AnyElement, App, Bounds, ContentMask, DispatchPhase, Element, ElementId, GlobalElementId,
-    Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId, OngoingScroll, Pixels,
-    ScrollDelta, ScrollWheelEvent, TouchPhase, Window, point, px,
+    Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId, Pixels, ScrollDelta,
+    ScrollWheelEvent, TouchPhase, Window, point, px,
 };
-#[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
 use std::{cell::RefCell, rc::Rc, time::Duration};
-#[cfg(target_family = "wasm")]
 use web_time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,7 +72,7 @@ impl ScrollBounce {
             id: id.into(),
             handle: Rc::new(handle.clone()),
             child: child.into_any_element(),
-            enabled: cfg!(any(target_os = "ios", target_os = "android")),
+            enabled: false,
             motion: ScrollBounceMotion::default(),
             on_scroll: None,
         }
@@ -101,7 +98,6 @@ impl ScrollBounce {
 struct State {
     physics: Physics,
     sampled_at: Option<Instant>,
-    ongoing_scroll: OngoingScroll,
     short_drag_distance: Option<f32>,
     last_wheel_at: Option<Instant>,
 
@@ -225,20 +221,13 @@ impl Element for ScrollBounce {
             let mut before = 0.;
             let mut allow_end_bounce = false;
             window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
-                let ScrollDelta::Pixels(mut delta) = event.delta else {
+                let ScrollDelta::Pixels(delta) = event.delta else {
                     return;
                 };
                 if !hitbox.should_handle_scroll(window) {
                     return;
                 }
                 let mut state = state.borrow_mut();
-                // Lock the gesture to the axis it started on, so a diagonal
-                // swipe cannot wobble out of the stretch from one packet to
-                // the next. Both dispatch phases see the same packet, and the
-                // lock gives both the same answer.
-                state
-                    .ongoing_scroll
-                    .lock_axis(&mut delta, event.touch_phase);
                 if delta.x.abs() > delta.y.abs() {
                     return;
                 }

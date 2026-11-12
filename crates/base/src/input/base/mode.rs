@@ -95,7 +95,7 @@ impl LayoutMode {
         match self {
             LayoutMode::CodeEditor {
                 language, folding, ..
-            } => *folding && (!cfg!(target_family = "wasm") || language.name().as_ref() == "json5"),
+            } => *folding && language.name().as_ref() == "json5",
             _ => false,
         }
     }

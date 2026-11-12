@@ -38,27 +38,7 @@ tracing = { version = "0.1" }
 unicode-linebreak = "0.1"
 unicode-segmentation = "1.13"
 web-time = "1"
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-smol = { version = "2.0" }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
 async-channel = "2.5"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-raw-window-handle = { version = "0.6" }
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSAccessibility", "NSView", "NSWindow", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSString"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"], version = "0.62" }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.14", default-features = false, features = ["async-io", "settings"] }
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("gpui-fast"))'] }

@@ -1,6 +1,4 @@
 use futures::Stream as _;
-#[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
 use std::{
     ops::{Range, RangeInclusive},
     pin::Pin,
@@ -8,7 +6,6 @@ use std::{
     task::Poll,
     time::Duration,
 };
-#[cfg(target_family = "wasm")]
 use web_time::Instant;
 
 use gpui::{
@@ -47,13 +44,7 @@ const STREAM_FADE_TICK: Duration = Duration::from_millis(33);
 
 pub(crate) fn init(cx: &mut App) {
     cx.bind_keys(vec![
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-c", input::Copy, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-c", input::Copy, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-a", input::SelectAll, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-a", input::SelectAll, Some(CONTEXT)),
     ]);
 }

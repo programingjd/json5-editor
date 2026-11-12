@@ -106,15 +106,6 @@ fn main() {
     }
     code.push_str("    } };\n}\n");
 
-    let mut default_source = String::from(
-        "/// The default component icon bundle.\n#[derive(rust_embed::RustEmbed)]\n#[folder = \"../../assets\"]\n",
-    );
-    for (_, path) in &defaults {
-        writeln!(default_source, "#[include = {path:?}]").unwrap();
-    }
-    default_source.push_str("pub struct Assets;\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo OUT_DIR"));
     fs::write(output.join("icon_name.rs"), code).expect("write generated icon names");
-    fs::write(output.join("default_assets.rs"), default_source)
-        .expect("write default asset source");
 }

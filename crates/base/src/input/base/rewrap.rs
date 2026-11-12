@@ -5,7 +5,6 @@ use super::{DisplayPoint, WrappingIndent};
 use gpui::{AppContext as _, Context, Pixels, Window, point, px};
 use std::time::Duration;
 
-#[cfg(target_family = "wasm")]
 #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
 let layoutChannel;
 const layoutContinuations = [];
@@ -25,15 +24,9 @@ extern "C" {
     fn yield_for_layout() -> js_sys::Promise;
 }
 
-async fn yield_layout(_executor: &gpui::BackgroundExecutor) {
-    #[cfg(target_family = "wasm")]
-    {
-        // Posted messages yield to input/painting without the minimum delay
-        // imposed by nested setTimeout calls in a long-running resize job.
-        let _ = wasm_bindgen_futures::JsFuture::from(yield_for_layout()).await;
-    }
-    #[cfg(not(target_family = "wasm"))]
-    _executor.timer(Duration::from_millis(1)).await;
+async fn yield_layout() {
+    // A browser task lets input and painting run between layout batches.
+    let _ = wasm_bindgen_futures::JsFuture::from(yield_for_layout()).await;
 }
 
 impl<M: InputModeKind> InputBaseState<M> {
@@ -198,7 +191,7 @@ impl<M: InputModeKind> InputBaseState<M> {
                     break;
                 }
                 // A macrotask boundary allows painting and input between bounded wrapping batches.
-                yield_layout(&executor).await;
+                yield_layout().await;
             }
         }));
     }

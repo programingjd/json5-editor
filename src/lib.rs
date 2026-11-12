@@ -928,7 +928,7 @@ pub fn run(
     ];
     console_log::init_with_level(log::Level::Info).expect("Failed to initialize logger");
     tracing_wasm::set_as_global_default();
-    gpui_kit::platform::web_init();
+    gpui_kit::web::init_logging();
 
     let app = web_application();
     let launch = move |cx: &mut App| {

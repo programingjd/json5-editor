@@ -1,20 +1,16 @@
-#[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
 use std::{
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
 };
-#[cfg(target_family = "wasm")]
 use web_time::Instant;
 
-use gpui::{App, Entity, Global, OwnedMenu};
+use gpui::{App, Entity, Global};
 
 use crate::text::TextViewState;
 
 pub struct DeferredPopover(#[allow(dead_code)] Rc<()>);
 
 pub struct GlobalState {
-    app_menus: Vec<OwnedMenu>,
     deferred_popovers: Vec<Weak<()>>,
     suppress_text_selection: bool,
 
@@ -30,7 +26,6 @@ impl Global for GlobalState {}
 impl GlobalState {
     fn new() -> Self {
         Self {
-            app_menus: Vec::new(),
             deferred_popovers: Vec::new(),
             suppress_text_selection: false,
             text_view_state_stack: RefCell::new(Vec::new()),
@@ -100,14 +95,6 @@ impl GlobalState {
         let order = self.selection_document_order.get();
         self.selection_document_order.set(order.wrapping_add(1));
         order
-    }
-
-    pub fn app_menus(&self) -> &[OwnedMenu] {
-        &self.app_menus
-    }
-
-    pub fn set_app_menus(&mut self, menus: Vec<OwnedMenu>) {
-        self.app_menus = menus;
     }
 
     pub fn is_in_deferred_context(cx: &App) -> bool {

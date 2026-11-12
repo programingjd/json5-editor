@@ -160,7 +160,7 @@ pub struct TooltipOverlay {
 impl TooltipOverlay {
     pub fn new() -> Self {
         Self {
-            enabled: !crate::is_mobile(),
+            enabled: true,
             content: None,
             previous_bounds: None,
             epoch: 0,

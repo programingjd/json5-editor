@@ -4,10 +4,8 @@
 //! colors, sizing, and motion belong to applications or the
 //! `gpui-component` façade.
 
-#[cfg(feature = "gpui-fast")]
-extern crate gpui_fast as gpui;
-#[cfg(all(feature = "gpui-fast", test))]
-extern crate gpui_fast_platform as gpui_platform;
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+compile_error!("The JSON5 editor crates require wasm32-unknown-unknown");
 
 pub mod actions;
 pub mod animation;
@@ -37,7 +35,6 @@ mod popup;
 mod positioner;
 mod radio;
 mod radio_group;
-mod reduce_motion;
 mod root;
 mod scroll_bounce;
 mod scrollable_mask;
@@ -64,7 +61,7 @@ pub use checkbox::{
 pub use component_traits::FocusableExt;
 pub use component_traits::{Disableable, Selectable};
 pub use element_ext::ElementExt;
-pub use event::{InteractiveElementExt, OngoingScrollExt};
+pub use event::InteractiveElementExt;
 pub use focus_trap::FocusTrapElement;
 #[doc(hidden)]
 pub use focus_trap::active_focus_trap;
@@ -97,7 +94,6 @@ pub use popup::{POPUP_PRIORITY, Popup};
 pub use positioner::{Align, Positioner, ResolvedPosition};
 pub use radio::{Radio, RadioStyles};
 pub use radio_group::RadioGroup;
-pub use reduce_motion::apply_system_reduce_motion;
 pub use root::{Root, RootPlugin};
 pub use scroll_bounce::{ScrollBounce, ScrollBounceMotion};
 pub use scrollable_mask::{RoundedFrameCover, ScrollableMask};
@@ -138,13 +134,9 @@ pub use virtual_list::virtual_list;
 pub use virtual_list::{VirtualList, VirtualListScrollHandle, h_virtual_list, v_virtual_list};
 
 use gpui::App;
-pub const fn is_mobile() -> bool {
-    cfg!(any(target_os = "ios", target_os = "android"))
-}
 pub fn init(cx: &mut App) {
     let _ = Theme::global_mut(cx);
     GlobalState::init(cx);
-    reduce_motion::init(cx);
     focus_trap::init(cx);
     popover::init(cx);
     number_input::init(cx);

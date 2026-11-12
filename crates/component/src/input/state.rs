@@ -123,7 +123,6 @@ impl TextInputState {
         &self,
         handler: std::rc::Rc<
             dyn Fn(
-                gpui_base::input::NativeMenu,
                 gpui_base::input::InputContextMenuCapabilities,
                 gpui::Point<gpui::Pixels>,
                 &mut Window,

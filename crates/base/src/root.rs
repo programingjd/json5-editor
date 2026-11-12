@@ -39,9 +39,6 @@ pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("tab", Tab, Some(CONTEXT)),
         KeyBinding::new("shift-tab", TabPrev, Some(CONTEXT)),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-c", Copy, Some(CONTEXT)),
-        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-c", Copy, Some(CONTEXT)),
     ]);
 }
@@ -130,8 +127,6 @@ impl Root {
     }
 
     pub fn new(view: impl Into<AnyView>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        #[cfg(all(target_os = "macos", not(test)))]
-        crate::install_window_hit_test_forwarder(window);
         let factories = cx
             .try_global::<PluginRegistry>()
             .map(|e| e.0.clone())

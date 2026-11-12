@@ -4,27 +4,14 @@
 //! [`Assets`] for the default component bundle, or [`AllAssets`] for the full
 //! catalog. Applications can provide their own source for additional icons.
 
-#[cfg(feature = "gpui-fast")]
-extern crate gpui_fast as gpui;
-#[cfg(all(feature = "gpui-fast", test))]
-extern crate gpui_fast_platform as gpui_platform;
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+compile_error!("The JSON5 editor crates require wasm32-unknown-unknown");
 
 mod icon;
 pub use icon::{IconName, IconNamed};
 
-#[cfg(not(target_family = "wasm"))]
-mod native_assets;
-
-#[cfg(target_family = "wasm")]
 mod wasm_assets;
-
-#[cfg(not(target_family = "wasm"))]
-pub use native_assets::{AllAssets, Assets};
-
-#[cfg(target_family = "wasm")]
 pub use wasm_assets::Assets;
-
-#[cfg(target_family = "wasm")]
 pub use wasm_assets::Assets as AllAssets;
 
 // Public only so exported macros can resolve dependencies in downstream crates,

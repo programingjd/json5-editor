@@ -1,6 +1,6 @@
 use std::{panic::Location, rc::Rc};
 
-use crate::{InteractiveElementExt as _, StyledExt};
+use crate::StyledExt;
 
 use super::{Scrollbar, ScrollbarAxis, ScrollbarHandle};
 use gpui::{
@@ -149,7 +149,6 @@ where
             })
             // On a single-axis area gpui otherwise remaps the other axis' delta
             // onto ours, so a purely horizontal swipe scrolls this vertically.
-            .lock_scroll_axis()
             .child(content);
 
         div()

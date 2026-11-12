@@ -5,8 +5,6 @@ pub use ::gpui::*;
 pub use ::gpui_base as base;
 pub use ::gpui_component as component;
 pub use ::gpui_kit_assets as assets;
-pub use ::gpui_platform as platform;
-#[cfg(target_family = "wasm")]
 pub use ::gpui_web as web;
 
 pub fn init(cx: &mut App) {

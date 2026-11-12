@@ -9,8 +9,8 @@ use gpui::{
 };
 
 use crate::button::{Button, ButtonVariants as _};
-use crate::input::clear_button;
 use crate::context_menu::ContextMenu;
+use crate::input::clear_button;
 use crate::spinner::Spinner;
 use crate::touch_selection::{EditMenuItem, TouchSelectionOverlay};
 use crate::{ActiveTheme, Colorize, v_flex};
@@ -21,7 +21,7 @@ use gpui_base::InputBase as BaseInput;
 use rust_i18n::t;
 
 use super::state::{TextInputState, sync_focused_input_registry};
-use super::{InputContentType, InputState, sync_native_content_type};
+use super::{InputContentType, InputState};
 use crate::ThemeStyled as _;
 
 fn accessibility_role(
@@ -576,7 +576,7 @@ impl RenderOnce for Input {
         state.set_text_align(text_align, cx);
         let custom = self.context_menu_builder.clone();
         state.on_context_menu(
-            Rc::new(move |_, capabilities, position, window, cx| {
+            Rc::new(move |capabilities, position, window, cx| {
                 let menu = if let Some(custom) = custom.as_ref() {
                     custom(ContextMenu::new(), window, cx)
                 } else {
@@ -633,11 +633,6 @@ impl RenderOnce for Input {
         let accessibility_value = ((window.is_a11y_active() || cfg!(feature = "test-support"))
             && exposes_accessibility_value(presentation.is_masked(), content_type))
         .then(|| state.text(cx).to_string());
-        let input_focused =
-            presentation.focus_handle().is_focused(window) && !presentation.is_disabled();
-        if input_focused {
-            sync_native_content_type(window, content_type, presentation.is_editable());
-        }
         let frame_focus_handle = window
             .use_keyed_state(("input-frame-focus", state.entity_id()), cx, |_, cx| {
                 cx.focus_handle()
