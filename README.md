@@ -91,3 +91,17 @@ Firefox.
 
 See the [extension README](extensions/README.md) for loading instructions.
 
+## Release artifacts
+
+- Build the standalone app and both browser extensions first.
+- From the project root, run `node scripts/release_artifacts.mjs`,
+  `scripts\release_artifacts.bat` on Windows, or
+  `sh scripts/release_artifacts.sh` on macOS/Linux. Node.js 24+ is required;
+  no additional dependencies are needed.
+- The script packages the contents of `extensions/dist/`,
+  `extensions/dist-firefox/`, and `www/dist/` with maximum ZIP compression as
+  `chrome-extension-unpacked.zip`, `firefox-extension-unpacked.zip`, and
+  `standalone.zip`, respectively, in the project root.
+- It also copies `assets/sbom.json` to the project root as `sbom.json`.
+  All four generated files are ignored by Git and overwritten on subsequent runs.
+

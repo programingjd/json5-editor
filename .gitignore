@@ -9,6 +9,10 @@
 /README-agent.md
 /AGENTS.md
 /standalone_*.zip
+/chrome-extension-unpacked.zip
+/firefox-extension-unpacked.zip
+/standalone.zip
+/sbom.json
 
 # Local editor and operating-system files
 /.idea/

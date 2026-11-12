@@ -16,3 +16,20 @@ export function installSearchShortcut(openSearch) {
     window.removeEventListener('gpui-json5-search', requested);
   };
 }
+
+export function preserveHistoryMouseButtons() {
+  const leaveToBrowser = event => {
+    if ((event.button === 3 || event.button === 4) && event.target instanceof HTMLCanvasElement) {
+      // GPUI cancels pointer events on the canvas. Keep the browser's default
+      // history action and leave these presses out of the editor's mouse state.
+      event.stopPropagation();
+    }
+  };
+  const options = { capture: true, passive: true };
+  window.addEventListener('pointerdown', leaveToBrowser, options);
+  window.addEventListener('pointerup', leaveToBrowser, options);
+  return () => {
+    window.removeEventListener('pointerdown', leaveToBrowser, options);
+    window.removeEventListener('pointerup', leaveToBrowser, options);
+  };
+}

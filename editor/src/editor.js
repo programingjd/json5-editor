@@ -7,7 +7,7 @@ import './processing-indicators.css';
 import { mountEditorShell } from './editor-shell.js';
 import './editor-shell.css';
 import { readColorScheme, toggleColorSchemeOverride, observeColorScheme } from './color-scheme.js';
-import { installSearchShortcut } from './browser-shortcuts.js';
+import { installSearchShortcut, preserveHistoryMouseButtons } from './browser-shortcuts.js';
 
 export function reportEditorError(error) {
   console.error('JSON5 editor:', error);
@@ -44,6 +44,7 @@ export async function startEditor({ initialDocument = null } = {}) {
     if (!document.getElementById('document-loading').hidden) return;
     void wasmReady.then(wasm => wasm.open_search()).catch(reportEditorError);
   });
+  const stopPreservingHistoryMouseButtons = preserveHistoryMouseButtons();
   const [wasm, fonts, hostedDocument] = await Promise.all([
     wasmReady,
     loadFonts(),
@@ -121,6 +122,7 @@ export async function startEditor({ initialDocument = null } = {}) {
     if (!event.persisted) {
       stopObserving();
       stopSearchShortcut();
+      stopPreservingHistoryMouseButtons();
     }
   });
 }
