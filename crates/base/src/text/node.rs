@@ -1301,7 +1301,7 @@ impl Paragraph {
                 }
                 node_highlights.push((inner_range, highlight));
             }
-            highlights = combine_highlights(highlights, node_highlights);
+            append_node_highlights(&mut highlights, node_highlights);
             offset += text_len;
         }
         let text = SharedString::from(text);
@@ -2249,7 +2249,7 @@ impl Paragraph {
                     )
                 })
                 .collect::<Vec<_>>();
-            highlights = combine_highlights(highlights, node_highlights);
+            append_node_highlights(&mut highlights, node_highlights);
             offset += inline_node.text.len();
         }
         highlights
@@ -2268,7 +2268,7 @@ impl Paragraph {
 
         if self.should_render_inline_flow() {
             return InlineFlow::new(
-                leaf_element_id(fade_key),
+                self.element_id(fade_key),
                 self.inline_flow_items(fade_key, fades, backgrounds, node_cx, cx),
                 node_cx.link_click_handler.clone(),
             )
@@ -2411,7 +2411,7 @@ impl Paragraph {
                     node_highlights.push((inner_range, highlight));
                 }
 
-                highlights = combine_highlights(highlights, node_highlights);
+                append_node_highlights(&mut highlights, node_highlights);
                 offset += text_len;
             }
         }
@@ -2446,7 +2446,7 @@ impl Paragraph {
         }
 
         div()
-            .id(leaf_element_id(fade_key))
+            .id(self.element_id(fade_key))
             .children(child_nodes)
             .into_any_element()
     }
@@ -2592,7 +2592,7 @@ impl Paragraph {
                     node_highlights.push((inner_range, highlight));
                 }
 
-                highlights = combine_highlights(highlights, node_highlights);
+                append_node_highlights(&mut highlights, node_highlights);
                 offset += text_len;
             }
         }
@@ -2625,8 +2625,31 @@ fn block_element_id(kind: &'static str, span: Option<Span>, ix: usize) -> Elemen
     (kind, span.map_or(ix, |span| span.start)).into()
 }
 
-fn leaf_element_id(fade_key: Option<TextLeafKey>) -> ElementId {
-    fade_key.map_or_else(|| ElementId::from("p"), ElementId::from)
+fn append_node_highlights(
+    highlights: &mut Vec<(Range<usize>, InlineHighlight)>,
+    node_highlights: Vec<(Range<usize>, InlineHighlight)>,
+) {
+    // Adjacent nodes normally cover disjoint bytes. Merge the accumulated
+    // ranges only when an application-supplied mark crosses a node boundary.
+    if highlights.last().is_some_and(|(last, _)| {
+        node_highlights
+            .iter()
+            .any(|(range, _)| !range.is_empty() && range.start < last.end)
+    }) {
+        *highlights = combine_highlights(std::mem::take(highlights), node_highlights);
+    } else {
+        highlights.extend(combine_highlights([], node_highlights));
+    }
+}
+
+impl Paragraph {
+    fn element_id(&self, fade_key: Option<TextLeafKey>) -> ElementId {
+        // HTML paragraphs have no source spans and use their retained identity.
+        fade_key.map_or_else(
+            || ElementId::NamedInteger("p".into(), Arc::as_ptr(&self.state) as usize as u64),
+            ElementId::from,
+        )
+    }
 }
 
 fn link_underline(style: &TextViewStyle) -> gpui::UnderlineStyle {

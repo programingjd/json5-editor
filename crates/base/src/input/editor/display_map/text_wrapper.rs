@@ -745,6 +745,10 @@ impl TextWrapper {
         self.revision = self.revision.wrapping_add(1);
     }
 
+    pub(crate) fn is_prepared(&self) -> bool {
+        self._initialized
+    }
+
     #[inline]
     pub(crate) fn text(&self) -> &Rope {
         &self.text
@@ -820,7 +824,9 @@ impl TextWrapper {
         self.width_measurements = Rc::default();
         self.font = font;
         self.font_size = font_size;
-        self.update_all(&self.text.clone(), cx);
+        if self.is_prepared() {
+            self.update_all(&self.text.clone(), cx);
+        }
         true
     }
 

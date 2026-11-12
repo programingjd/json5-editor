@@ -1,3 +1,5 @@
+mod selection_paint;
+
 use gpui::Corners;
 use std::{
     cell::RefCell,
@@ -9,11 +11,10 @@ use std::{
 };
 
 use gpui::{
-    App, BorderStyle, Bounds, ClickEvent, CursorStyle, Edges, Element, ElementId, GlobalElementId,
-    Half, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId,
+    App, BorderStyle, Bounds, ClickEvent, CursorStyle, Element, ElementId, GlobalElementId, Half,
+    HighlightStyle, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId,
     MouseButton, MouseClickEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
-    SharedString, StyledText, TextAlign, TextLayout, TextRun, TextStyle, Window, point, px, quad,
-    size,
+    SharedString, StyledText, TextAlign, TextLayout, TextRun, TextStyle, Window, point, px, size,
 };
 
 use crate::{
@@ -210,10 +211,17 @@ pub(super) struct Inline {
     state: Arc<Mutex<InlineState>>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default)]
 pub(crate) struct InlineState {
     pub(super) text: SharedString,
     pub(super) selection: Option<Selection>,
+    selection_rows: Option<Box<selection_paint::Rows>>,
+}
+
+impl PartialEq for InlineState {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text && self.selection == other.selection
+    }
 }
 
 struct RetainedLayout {
@@ -669,79 +677,6 @@ impl Inline {
         ))
     }
 
-    fn paint_selection(
-        selection: &Selection,
-        text_layout: &TextLayout,
-        bounds: &Bounds<Pixels>,
-        window: &mut Window,
-        color: gpui::Hsla,
-    ) {
-        let mut start = selection.start;
-        let mut end = selection.end;
-        if end < start {
-            std::mem::swap(&mut start, &mut end);
-        }
-        let Some(start_position) = text_layout.position_for_index(start) else {
-            return;
-        };
-        let Some(end_position) = text_layout.position_for_index(end) else {
-            return;
-        };
-
-        let line_height = text_layout.line_height();
-        if start_position.y == end_position.y {
-            window.paint_quad(quad(
-                Bounds::from_corners(
-                    start_position,
-                    point(end_position.x, end_position.y + line_height),
-                ),
-                px(0.),
-                color,
-                Edges::default(),
-                gpui::transparent_black(),
-                BorderStyle::default(),
-            ));
-        } else {
-            window.paint_quad(quad(
-                Bounds::from_corners(
-                    start_position,
-                    point(bounds.right(), start_position.y + line_height),
-                ),
-                px(0.),
-                color,
-                Edges::default(),
-                gpui::transparent_black(),
-                BorderStyle::default(),
-            ));
-
-            if end_position.y > start_position.y + line_height {
-                window.paint_quad(quad(
-                    Bounds::from_corners(
-                        point(bounds.left(), start_position.y + line_height),
-                        point(bounds.right(), end_position.y),
-                    ),
-                    px(0.),
-                    color,
-                    Edges::default(),
-                    gpui::transparent_black(),
-                    BorderStyle::default(),
-                ));
-            }
-
-            window.paint_quad(quad(
-                Bounds::from_corners(
-                    point(bounds.left(), end_position.y),
-                    point(end_position.x, end_position.y + line_height),
-                ),
-                px(0.),
-                color,
-                Edges::default(),
-                gpui::transparent_black(),
-                BorderStyle::default(),
-            ));
-        }
-    }
-
     fn paint_range_highlights(&self, text_layout: &TextLayout, window: &mut Window) {
         let glyphs = glyph_boxes(
             text_layout,
@@ -854,7 +789,7 @@ impl Element for Inline {
 
     fn paint(
         &mut self,
-        global_id: Option<&GlobalElementId>,
+        _: Option<&GlobalElementId>,
         _: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
@@ -875,8 +810,7 @@ impl Element for Inline {
         if !self.range_backgrounds.is_empty() {
             self.paint_range_highlights(&text_layout, window);
         }
-        self.styled_text
-            .paint(global_id, None, bounds, &mut (), &mut (), window, cx);
+        _ = text_layout.paint_background(window, cx);
 
         // layout selections
         let (is_selectable, is_selection, selection) =
@@ -910,13 +844,20 @@ impl Element for Inline {
             window.set_cursor_style(CursorStyle::PointingHand, &hitbox);
         }
 
-        if let Some(selection) = &state.selection {
+        if let Some(selection) = state.selection {
             let color = GlobalState::global(cx)
                 .text_view_state()
                 .map(|state| state.read(cx).text_view_style.selection())
                 .unwrap_or_else(|| crate::Theme::global(cx).tokens.colors.selection);
-            Self::paint_selection(selection, &text_layout, &bounds, window, color);
-            if let Some((start, end)) = Self::selection_edges(selection, &text_layout)
+            selection_paint::visit(
+                &text_layout,
+                window.text_style().text_align,
+                selection.start.min(selection.end)..selection.start.max(selection.end),
+                window.content_mask().bounds,
+                &mut state.selection_rows,
+                |rect| window.paint_quad(gpui::fill(rect, color)),
+            );
+            if let Some((start, end)) = Self::selection_edges(&selection, &text_layout)
                 && let Some(text_view_state) = GlobalState::global(cx).text_view_state()
             {
                 text_view_state
@@ -924,7 +865,10 @@ impl Element for Inline {
                     .selection_adapter
                     .register_selection_edges(start, end);
             }
+        } else {
+            state.selection_rows = None;
         }
+        _ = text_layout.paint_foreground(window, cx);
 
         if is_selectable {
             if let Some(text_view_state) = GlobalState::global(cx).text_view_state() {

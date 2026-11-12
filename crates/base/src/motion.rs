@@ -220,6 +220,8 @@ where
 #[derive(Clone)]
 struct ValueTransition<T> {
     from: T,
+    reversing_adjusted_start: T,
+    policy: Transition,
     target: T,
     started_at: Instant,
     reversing_factor: f32,
@@ -267,6 +269,8 @@ where
     let now = cx.background_executor().now();
     let state = window.use_keyed_state(id, cx, |_, _| ValueTransition {
         from: target.clone(),
+        reversing_adjusted_start: target.clone(),
+        policy: policy.clone(),
         target: target.clone(),
         started_at: now,
         reversing_factor: 1.0,
@@ -279,6 +283,8 @@ where
         if snapshot.from != target || snapshot.target != target {
             state.update(cx, |state, _| {
                 state.from = target.clone();
+                state.reversing_adjusted_start = target.clone();
+                state.policy = policy.clone();
                 state.target = target.clone();
                 state.started_at = now;
                 state.reversing_factor = 1.0;
@@ -292,31 +298,46 @@ where
     }
 
     let elapsed = now.saturating_duration_since(snapshot.started_at);
-    let (progress, status) = policy.progress(elapsed, snapshot.duration);
+    let (progress, status) = snapshot.policy.progress(elapsed, snapshot.duration);
     let sampled = snapshot
         .from
-        .interpolate(&snapshot.target, policy.sample(progress));
+        .interpolate(&snapshot.target, snapshot.policy.sample(progress));
 
     let (value, status) = if snapshot.target != target {
-        let reversing = target == snapshot.from;
+        // A second reversal still returns to the logical start, even though
+        // the previous transition began at a sampled, intermediate value.
+        let reversing = matches!(status, MotionStatus::Running | MotionStatus::Delayed)
+            && target == snapshot.reversing_adjusted_start;
         let reversing_factor = if reversing {
-            (policy.sample(progress) * snapshot.reversing_factor
+            (snapshot.policy.sample(progress) * snapshot.reversing_factor
                 + (1.0 - snapshot.reversing_factor))
+                .abs()
                 .clamp(0.0, 1.0)
         } else {
             1.0
         };
-        let duration = policy.duration.mul_f32(reversing_factor);
+        let duration = policy.duration.mul_f64(f64::from(reversing_factor));
+        let mut active_policy = policy;
+        if reversing && let SignedDuration::Negative(delay) = active_policy.delay {
+            active_policy.delay =
+                SignedDuration::negative(delay.mul_f64(f64::from(reversing_factor)));
+        }
         state.update(cx, |state, _| {
+            state.reversing_adjusted_start = if reversing {
+                snapshot.target.clone()
+            } else {
+                sampled.clone()
+            };
+            state.policy = active_policy.clone();
             state.from = sampled.clone();
             state.target = target.clone();
             state.started_at = now;
             state.reversing_factor = reversing_factor;
             state.duration = duration;
         });
-        let (initial_progress, initial_status) = policy.progress(Duration::ZERO, duration);
+        let (initial_progress, initial_status) = active_policy.progress(Duration::ZERO, duration);
         (
-            sampled.interpolate(&target, policy.sample(initial_progress)),
+            sampled.interpolate(&target, active_policy.sample(initial_progress)),
             initial_status,
         )
     } else {

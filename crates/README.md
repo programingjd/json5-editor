@@ -4,9 +4,9 @@ These private, unpublished crates belong to the JSON5 Editor. Build them through
 the workspace in `../Cargo.toml`; no GPUI Kit checkout or Git dependency is required.
 They are a subset for the web editor, not a general replacement for GPUI Kit.
 
-The local crates use version `0.9.0`. They remain an editor-specific subset.
+The local crates use version `0.9.1` for the editor-specific subset.
 The source originated from GPUI Kit 0.7.1,
-with selected fixes through 0.9.0 backported for search anchoring, diagnostic hover,
+with selected fixes through 0.9.1 backported for search anchoring, diagnostic hover,
 caret visibility and blinking, tooltips, button states, scrollbar hit testing,
 focus traps and element bounds.
 Measured wrapping reuse is integrated into the editor's cancellable layout jobs.

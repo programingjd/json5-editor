@@ -431,6 +431,8 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) ime_marked_range: Option<CursorSelection>,
     pub(super) last_layout: Option<LastLayout>,
     pub(super) last_cursor: Option<usize>,
+    /// The caret geometry last reported to the platform input method.
+    pub(super) ime_anchor: Option<(Point<Pixels>, Option<Bounds<Pixels>>)>,
 
     pub(super) input_bounds: Bounds<Pixels>,
 
@@ -800,6 +802,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             last_selected_range: None,
             column_select_start: None,
             last_cursor: None,
+            ime_anchor: None,
             scroll_handle: ScrollHandle::new(),
             scroll_size: gpui::size(px(0.), px(0.)),
             editor_scrollbar_snapshot: Cell::new(None),
@@ -3672,8 +3675,8 @@ impl<M: InputModeKind> InputBaseState<M> {
         let width_changed = self.input_bounds.size.width != new_bounds.size.width;
         self.input_bounds = new_bounds;
 
-        // Prepaint owns wrapping requests. Paint only records its resulting
-        // geometry; it must not submit a second request using LastLayout.
+        // Prepaint owns wrapping requests. Publishing bounds must not
+        // submit another request using LastLayout.
         if width_changed {
             self.mode.update_auto_grow(&self.display_map);
             cx.notify();

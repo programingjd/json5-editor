@@ -3330,6 +3330,7 @@ pub(super) struct PrepaintState {
     bounds: Bounds<Pixels>,
 
     fold_icon_layout: FoldIconLayout,
+    gutter_hitbox: Option<Hitbox>,
     gutter_hover: Option<AnyElement>,
     // Inline completion rendering data
     ghost_lines: Vec<ShapedLine>,
@@ -3899,12 +3900,11 @@ impl<M: InputModeKind> Element for TextElement<M> {
         // Stash the fresh caret geometry for caret-anchored popups. Their
         // deferred prepaint runs after this prepaint but before paint, so
         // they anchor to the current frame's caret instead of the previous
-        // frame's. Only the positioning geometry is stashed here; the rest
-        // of the paint-time state updates stay where they are.
+        // frame's. The rest of the layout is published at the end of prepaint.
         let caret_geometry = last_layout.cursor_bounds.map(|cursor_bounds| {
             let mut scroll_offset = cursor_scroll_offset;
             // Mirror update_scroll_offset's clamping with the fresh values,
-            // so the stash matches what paint will publish.
+            // so the stash matches the layout published below.
             let state = self.state.read(cx);
             let safe_y_range = (-scroll_size.height + input_bounds.size.height).min(px(0.))..px(0.);
             scroll_offset.y = if state.is_single_line() {
@@ -4016,6 +4016,15 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 cursor_scroll_offset,
                 state,
             )));
+        let gutter_hitbox = (line_numbers.is_some() || state.mode.is_folding()).then(|| {
+            let bounds = editor_gutter_bounds(
+                input_bounds,
+                last_layout.line_number_width - CODE_LEFT_PADDING,
+                ghost_lines_height,
+                state.editor_paddings,
+            );
+            window.insert_hitbox(bounds, HitboxBehavior::Normal)
+        });
         let (gutter_hover, icon_opacity) =
             self.layout_gutter_hover(input_bounds, &last_layout, ghost_lines_height, window, cx);
         let fold_icon_layout = self.layout_fold_icons(
@@ -4030,6 +4039,53 @@ impl<M: InputModeKind> Element for TextElement<M> {
         let hitbox = window.insert_hitbox(input_bounds, HitboxBehavior::Normal);
 
         let token_elements = self.prepaint_tokens(&last_layout, bounds, token_elements, window, cx);
+
+        // Publish geometry before paint and before caret-anchored overlays use it.
+        self.state.update(cx, |state, cx| {
+            let origin = state.last_bounds.map(|last| last.origin);
+            let moved = origin != Some(bounds.origin);
+            let same_place = |a: Point<Pixels>, b: Point<Pixels>| {
+                (a.x - b.x).abs() < px(0.01) && (a.y - b.y).abs() < px(0.01)
+            };
+            // An unfocused input does not need another frame when its parent
+            // moves it without changing its layout relative to the viewport.
+            let geometry_changed = (state.focus_handle.is_focused(window) && moved)
+                || state.last_bounds.map(|last| last.size) != Some(bounds.size)
+                || state.input_bounds.size != input_bounds.size
+                || origin.is_none_or(|origin| {
+                    !same_place(
+                        state.input_bounds.origin - origin,
+                        input_bounds.origin - bounds.origin,
+                    )
+                })
+                || state.scroll_size != scroll_size
+                || state.last_layout.as_ref().is_none_or(|layout| {
+                    let caret_moved = origin.is_none_or(|origin| {
+                        match (layout.cursor_bounds, last_layout.cursor_bounds) {
+                            (Some(last), Some(caret)) => {
+                                last.size != caret.size
+                                    || !same_place(
+                                        last.origin - origin,
+                                        caret.origin - bounds.origin,
+                                    )
+                            }
+                            (last, caret) => last.is_some() != caret.is_some(),
+                        }
+                    });
+                    caret_moved || layout.line_height != last_layout.line_height
+                });
+            state.last_layout = Some(last_layout.clone());
+            state.last_bounds = Some(bounds);
+            state.last_cursor = Some(state.cursor());
+            state.set_input_bounds(input_bounds, cx);
+            state.last_selected_range = Some(*state.active_selection());
+            state.scroll_size = scroll_size;
+            state.update_scroll_offset(Some(cursor_scroll_offset), cx);
+            state.deferred_scroll_offset = None;
+            if geometry_changed {
+                cx.notify();
+            }
+        });
         PrepaintState {
             token_elements,
             hitbox,
@@ -4048,6 +4104,7 @@ impl<M: InputModeKind> Element for TextElement<M> {
             range_decoration_frames,
             indent_guides_path,
             fold_icon_layout,
+            gutter_hitbox,
             gutter_hover,
             ghost_first_line,
             ghost_lines,
@@ -4065,13 +4122,12 @@ impl<M: InputModeKind> Element for TextElement<M> {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let (focus_handle, show_cursor, disabled, selected_range, editor_style, editor_paddings) = {
+        let (focus_handle, show_cursor, disabled, editor_style, editor_paddings) = {
             let state = self.state.read(cx);
             (
                 state.focus_handle.clone(),
                 state.show_cursor(window, cx),
                 state.disabled,
-                *state.active_selection(),
                 state.editor_style.clone(),
                 state.editor_paddings,
             )
@@ -4085,6 +4141,16 @@ impl<M: InputModeKind> Element for TextElement<M> {
             ElementInputHandler::new(bounds, self.state.clone()),
             cx,
         );
+        if focused {
+            let anchor = (bounds.origin, prepaint.last_layout.cursor_bounds);
+            if self.state.read(cx).ime_anchor != Some(anchor) {
+                self.state
+                    .update(cx, |state, _| state.ime_anchor = Some(anchor));
+                window.invalidate_character_coordinates();
+            }
+        } else if self.state.read(cx).ime_anchor.is_some() {
+            self.state.update(cx, |state, _| state.ime_anchor = None);
+        }
 
         // Paint multi line text
         let line_height = window.line_height();
@@ -4413,32 +4479,11 @@ impl<M: InputModeKind> Element for TextElement<M> {
         if let Some(gutter) = prepaint.gutter_hover.as_mut() {
             gutter.paint(window, cx);
         }
+        if let Some(hitbox) = &prepaint.gutter_hitbox {
+            window.set_cursor_style(gpui::CursorStyle::Arrow, hitbox);
+        }
         // Paint fold icons for every fold candidate.
         self.paint_fold_icons(&mut prepaint.fold_icon_layout, window, cx);
-
-        self.state.update(cx, |state, cx| {
-            let geometry_changed = state.last_bounds != Some(bounds)
-                || state.input_bounds != input_bounds
-                || state.scroll_size != prepaint.scroll_size
-                || state.last_layout.as_ref().is_none_or(|layout| {
-                    layout.cursor_bounds != prepaint.last_layout.cursor_bounds
-                        || layout.line_height != prepaint.last_layout.line_height
-                });
-            state.last_layout = Some(prepaint.last_layout.clone());
-            state.last_bounds = Some(bounds);
-            state.last_cursor = Some(state.cursor());
-            state.set_input_bounds(input_bounds, cx);
-            state.last_selected_range = Some(selected_range);
-            state.scroll_size = prepaint.scroll_size;
-            state.update_scroll_offset(Some(prepaint.cursor_scroll_offset), cx);
-            state.deferred_scroll_offset = None;
-
-            // Layout consumers need changed geometry, not another notification
-            // for every paint of an unchanged input.
-            if geometry_changed {
-                cx.notify();
-            }
-        });
 
         // Paint inline completion first line suffix (after cursor on same line)
         if focused {

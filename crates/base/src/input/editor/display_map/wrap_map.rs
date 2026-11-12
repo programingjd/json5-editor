@@ -96,6 +96,11 @@ impl WrapMap {
         cx: &mut App,
     ) {
         self.wrapper.adjust_inline_metrics(range, new_text.len());
+        // The first prepaint supplies the input's actual font.
+        if !self.wrapper.is_prepared() {
+            self.wrapper.set_default_text(changed_text);
+            return;
+        }
         self.wrapper.update(changed_text, range, new_text, cx);
     }
 
