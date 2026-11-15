@@ -17,6 +17,18 @@
   },
   "icons": [
     {
+      "file": "icons/open-new-tab.svg",
+      "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/openNewTab.svg",
+      "sha256": "357c634db5b9fcb52c09a02d2491239086fcb92ee8d222e35872a0ea37beae7d",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/run.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/run/run.svg",
+      "sha256": "152f9b200bddd25b2ee3f0b03c2be710aa131891fc0e39e0d74f2532a626e6e9",
+      "provider": "jetbrains"
+    },
+    {
       "file": "icons/search.svg",
       "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/general/search.svg",
       "sha256": "81e8241e7b38407420c573dfa264cd6df5deac0e8d59b935ce4c02b607bbe342",

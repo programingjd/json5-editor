@@ -1,16 +1,21 @@
 use std::{cell::RefCell, rc::Rc};
 
-use gpui_kit::base::input::{Enter, InputPreparation};
+use gpui_kit::base::{
+    StyledExt as _,
+    input::{Enter, InputEvent, InputPreparation},
+};
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, Size,
-    button::{Button, ButtonVariants as _},
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, Size,
+    button::{Button, ButtonCustomVariant, ButtonRounded, ButtonVariants as _},
     input::{Editor, EditorState, Input, InputState, Textarea, TextareaState},
     menu::{DropdownMenu as _, PopupMenuItem},
+    toolbar::Toolbar,
 };
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
-    div, prelude::FluentBuilder as _, px, relative, rems,
+    Anchor, AnyElement, App, AppContext as _, Context, Div, Entity, Focusable as _,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window, accesskit::Role, div,
+    prelude::FluentBuilder as _, px, relative, rems,
 };
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
@@ -19,18 +24,25 @@ use wasm_bindgen::JsValue;
 use crate::{
     palette,
     tree_sitter_highlighter::{ParseSnapshot, SyntaxEditHandler, TreeSitterHighlighter},
+    workspace_tab_background, workspace_tab_foreground,
 };
 
 const METHODS: &[&str] = &["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const REQUEST_TABS: &[&str] = &["JSON", "Params", "Headers", "Auth", "Settings", "Info"];
 const RESPONSE_TABS: &[&str] = &["Response", "Request", "Headers", "Cookies", "Timeline"];
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub(super) struct Preview {
     url: String,
     request: String,
     headers: String,
-    response: Response,
+    response: Option<Response>,
+}
+
+pub(super) struct ClientCallbacks {
+    pub(super) send: Function,
+    pub(super) queue_edit: Function,
+    pub(super) load_request: Function,
 }
 
 #[derive(Serialize)]
@@ -136,24 +148,24 @@ pub(super) struct HttpClient {
     params: Entity<TextareaState>,
     headers: Entity<TextareaState>,
     response_body: JsonBody,
-    response: Response,
+    response: Option<Response>,
     response_loading: bool,
     request_loading: bool,
-    sent: Request,
+    sent: Option<Request>,
     request_tab: usize,
     response_tab: usize,
     send: Function,
+    tab_id: u32,
     pending: bool,
     error: Option<String>,
 }
 
 impl HttpClient {
-    pub(super) fn new(
+    fn new(
         window: &mut Window,
         cx: &mut Context<Self>,
-        send: Function,
-        queue_edit: Function,
-        load_request: Function,
+        tab_id: u32,
+        callbacks: &ClientCallbacks,
         preview: Preview,
     ) -> Self {
         let url = cx.new(|cx| {
@@ -167,6 +179,8 @@ impl HttpClient {
                 .placeholder("Name: value")
                 .default_value(preview.headers.clone())
         });
+        let queue_edit = callbacks.queue_edit.clone();
+        let tab = JsValue::from(tab_id);
         let on_edit: SyntaxEditHandler = Rc::new(move |revision, edit, text| {
             let payload = serde_json::json!({
                 "revision": revision,
@@ -178,13 +192,15 @@ impl HttpClient {
                     "new_end_row": edit.new_end_position.row, "new_end_column": edit.new_end_position.column,
                 },
             });
-            let _ = queue_edit.call1(
+            let _ = queue_edit.call2(
                 &JsValue::UNDEFINED,
+                &tab,
                 &JsValue::from_str(&payload.to_string()),
             );
         });
         let request = JsonBody::new(Some(on_edit), window, cx);
         let response_body = JsonBody::new(None, window, cx);
+        let load_request = callbacks.load_request.clone();
         request.editor.update(cx, |editor, cx| {
             editor.set_readonly(true, cx);
             editor.set_clipboard_paste_handler(move |editor, text| {
@@ -192,12 +208,23 @@ impl HttpClient {
                     && editor.selected_range() == (0..editor.text().len())
                     && text.trim_start().starts_with(['{', '['])
                     && load_request
-                        .call1(&JsValue::UNDEFINED, &JsValue::from_str(text))
+                        .call2(
+                            &JsValue::UNDEFINED,
+                            &JsValue::from(tab_id),
+                            &JsValue::from_str(text),
+                        )
                         .is_ok()
             });
         });
-        Self {
+        let sent = preview.response.as_ref().map(|_| Request {
             method: "POST",
+            url: preview.url,
+            params: String::new(),
+            headers: preview.headers,
+            body: preview.request,
+        });
+        Self {
+            method: if sent.is_some() { "POST" } else { "GET" },
             url,
             request,
             params,
@@ -206,16 +233,11 @@ impl HttpClient {
             response: preview.response,
             response_loading: false,
             request_loading: true,
-            sent: Request {
-                method: "POST",
-                url: preview.url,
-                params: String::new(),
-                headers: preview.headers,
-                body: preview.request,
-            },
+            sent,
             request_tab: 0,
             response_tab: 0,
-            send,
+            send: callbacks.send.clone(),
+            tab_id,
             pending: false,
             error: None,
         }
@@ -225,7 +247,7 @@ impl HttpClient {
         if self.pending || self.request_loading {
             return;
         }
-        self.sent = Request {
+        let request = Request {
             method: self.method,
             url: self.url.read(cx).value().trim().to_owned(),
             params: self.params.read(cx).value().to_string(),
@@ -241,10 +263,15 @@ impl HttpClient {
         };
         self.error = None;
         self.pending = true;
-        let payload = serde_json::to_string(&self.sent).expect("Serialize HTTP request");
+        let payload = serde_json::to_string(&request).expect("Serialize HTTP request");
+        self.sent = Some(request);
         if self
             .send
-            .call1(&JsValue::UNDEFINED, &JsValue::from_str(&payload))
+            .call2(
+                &JsValue::UNDEFINED,
+                &JsValue::from(self.tab_id),
+                &JsValue::from_str(&payload),
+            )
             .is_err()
         {
             self.pending = false;
@@ -378,7 +405,7 @@ impl HttpClient {
             }
         });
         if installed && let Some(response) = response_metadata {
-            self.response = response;
+            self.response = Some(response);
             self.pending = false;
             self.response_loading = false;
             self.response_tab = 0;
@@ -410,15 +437,20 @@ impl HttpClient {
     }
 
     fn request_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let send_disabled = self.pending || self.request_loading;
+        let palette = palette::get(cx);
+        let send_color = if send_disabled {
+            cx.theme().muted_foreground.opacity(0.5)
+        } else {
+            palette.foreground
+        };
+        let send_style = ButtonCustomVariant::new(cx)
+            .foreground(palette.foreground)
+            .hover(palette.hover)
+            .active(palette.active);
         let owner = cx.weak_entity();
-        div()
-            .h(px(30.))
-            .flex()
-            .items_center()
-            .mx_2()
-            .mt(rems(0.5625))
-            .mb(rems(0.3125))
-            .flex_none()
+        exchange_header()
+            .bg(palette.background)
             .border_1()
             .rounded_sm()
             .border_color(cx.theme().border.opacity(0.65))
@@ -459,12 +491,17 @@ impl HttpClient {
             )
             .child(
                 Button::new("send-request")
-                    .ghost()
+                    .custom(send_style)
                     .with_size(Size::Small)
                     .w_auto()
                     .px_3()
-                    .disabled(self.pending || self.request_loading)
-                    .icon(Icon::default().data(include_bytes!("send.svg")))
+                    .disabled(send_disabled)
+                    .when(!send_disabled, |button| button.cursor_pointer())
+                    .icon(
+                        Icon::default()
+                            .data(include_bytes!("../../../assets/icons/run.svg"))
+                            .text_color(send_color),
+                    )
                     .tooltip("Send request")
                     .accessibility_label("Send request")
                     .on_click(cx.listener(|this, _, _, cx| this.send_request(cx))),
@@ -480,23 +517,17 @@ impl HttpClient {
             "Sending request…".to_owned()
         } else if let Some(error) = &self.error {
             error.clone()
-        } else {
+        } else if let Some(response) = &self.response {
             format!(
                 "{} {}  •  {} ms  •  {} B",
-                self.response.status,
-                self.response.status_text,
-                self.response.elapsed_ms,
-                self.response.bytes
+                response.status, response.status_text, response.elapsed_ms, response.bytes
             )
+        } else {
+            "No response yet".to_owned()
         };
-        div()
-            .flex()
-            .items_center()
+        exchange_header()
             .gap_3()
             .px_3()
-            .mt_1()
-            .h(px(40.))
-            .flex_none()
             .font_family(cx.theme().mono_font_family.clone())
             .text_sm()
             .child(
@@ -524,35 +555,42 @@ impl HttpClient {
             (REQUEST_TABS, self.request_tab, "request-tabs")
         };
         let palette = palette::get(cx);
-        let foreground = palette.ui_foreground;
-        let underline = palette.link;
+        let segment_style = ButtonCustomVariant::new(cx)
+            .foreground(palette.ui_foreground)
+            .hover(palette.hover)
+            .active(palette.active);
+        let selected_style = segment_style
+            .active(cx.theme().tab_active)
+            .foreground(cx.theme().tab_active_foreground);
         div()
             .id(id)
+            .role(Role::TabList)
             .flex()
             .items_center()
-            .h(px(36.))
+            .h_9()
             .flex_none()
-            .px_1()
             .overflow_x_scroll()
-            .children(labels.iter().enumerate().map(|(index, &label)| {
-                let selected = active == index;
+            .child(
                 div()
                     .flex_none()
-                    .h_full()
                     .flex()
                     .items_center()
-                    .border_b_1()
-                    .border_color(if selected {
-                        underline
-                    } else {
-                        gpui_kit::transparent_black()
-                    })
-                    .child(
+                    .gap(rems(0.125))
+                    .px_1()
+                    .py(rems(0.125))
+                    .children(labels.iter().enumerate().map(|(index, &label)| {
                         Button::new((id, index))
-                            .ghost()
+                            .custom(if active == index {
+                                selected_style
+                            } else {
+                                segment_style
+                            })
                             .with_size(Size::Small)
+                            .cursor_pointer()
+                            .rounded(ButtonRounded::Small)
+                            .role(Role::Tab)
+                            .selected(active == index)
                             .label(label)
-                            .text_color(foreground)
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if response {
                                     this.response_tab = index;
@@ -560,9 +598,9 @@ impl HttpClient {
                                     this.request_tab = index;
                                 }
                                 cx.notify();
-                            })),
-                    )
-            }))
+                            }))
+                    })),
+            )
     }
 
     fn request_content(&self, cx: &App) -> AnyElement {
@@ -588,6 +626,9 @@ impl HttpClient {
     }
 
     fn response_content(&self, cx: &App) -> AnyElement {
+        let Some(sent) = &self.sent else {
+            return div().into_any_element();
+        };
         match self.response_tab {
             0 => self
                 .response_body
@@ -601,15 +642,15 @@ impl HttpClient {
                 .py_2()
                 .font_family(cx.theme().mono_font_family.clone())
                 .text_sm()
-                .child(format!("{} {}", self.sent.method, self.sent.url))
-                .when(!self.sent.params.is_empty(), |view| {
-                    view.child(div().mt_2().child(self.sent.params.clone()))
+                .child(format!("{} {}", sent.method, sent.url))
+                .when(!sent.params.is_empty(), |view| {
+                    view.child(div().mt_2().child(sent.params.clone()))
                 })
-                .when(!self.sent.headers.is_empty(), |view| {
-                    view.child(div().mt_2().child(self.sent.headers.clone()))
+                .when(!sent.headers.is_empty(), |view| {
+                    view.child(div().mt_2().child(sent.headers.clone()))
                 })
-                .when(!self.sent.body.is_empty(), |view| {
-                    view.child(div().mt_2().child(self.sent.body.clone()))
+                .when(!sent.body.is_empty(), |view| {
+                    view.child(div().mt_2().child(sent.body.clone()))
                 })
                 .into_any_element(),
             2 => div()
@@ -618,29 +659,69 @@ impl HttpClient {
                 .overflow_y_scroll()
                 .children(
                     self.response
-                        .headers
                         .iter()
+                        .flat_map(|response| &response.headers)
                         .map(|(name, value)| detail(name, value)),
                 )
                 .into_any_element(),
             3 => detail("Cookies", "No response cookies").into_any_element(),
-            _ => detail("Total", &format!("{} ms", self.response.elapsed_ms)).into_any_element(),
+            _ => div()
+                .children(
+                    self.response
+                        .iter()
+                        .map(|response| detail("Total", &format!("{} ms", response.elapsed_ms))),
+                )
+                .into_any_element(),
         }
+    }
+
+    fn editor_panel(&self, response: bool, cx: &mut Context<Self>) -> Div {
+        let content = if response {
+            self.response_content(cx)
+        } else {
+            self.request_content(cx)
+        };
+        div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .pb_2()
+            .child(self.tabs(response, cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .px_2()
+                    .child(content),
+            )
     }
 }
 
 impl Render for HttpClient {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette::get(cx);
+        let tab_background = workspace_tab_background(self.tab_id as usize);
         let request_background = palette.background;
         let response_background = palette.toolbar;
-        let separator = palette.separator;
+        let radius = cx.theme().radius;
         div()
+            .id(("request-workspace", self.tab_id as usize))
             .size_full()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
             .flex()
             .overflow_hidden()
-            .font_family(cx.theme().font_family.clone())
-            .text_color(palette.foreground)
+            .p_2()
+            .gap_2()
+            .bg(tab_background)
+            .role(Role::TabPanel)
+            .aria_label("Request")
             .child(
                 div()
                     .w(relative(0.515))
@@ -649,16 +730,11 @@ impl Render for HttpClient {
                     .flex_none()
                     .flex()
                     .flex_col()
-                    .bg(request_background)
                     .child(self.request_bar(cx))
-                    .child(self.tabs(false, cx))
                     .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .child(self.request_content(cx)),
+                        self.editor_panel(false, cx)
+                            .rounded(radius)
+                            .bg(request_background),
                     ),
             )
             .child(
@@ -668,24 +744,225 @@ impl Render for HttpClient {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .border_l_1()
-                    .border_color(separator)
+                    .rounded(radius)
+                    .overflow_hidden()
                     .bg(response_background)
                     .child(self.response_status(cx))
-                    .child(self.tabs(true, cx))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .child(self.response_content(cx)),
-                    ),
+                    .child(self.editor_panel(true, cx)),
             )
     }
 }
 
-fn detail(name: &str, value: &str) -> impl IntoElement {
+pub(super) struct Workspace {
+    tabs: Vec<Entity<HttpClient>>,
+    url_subscriptions: Vec<Subscription>,
+    active_tab: u32,
+    tab_scroll: ScrollHandle,
+    callbacks: ClientCallbacks,
+}
+
+impl Workspace {
+    pub(super) fn new(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        callbacks: ClientCallbacks,
+        preview: Preview,
+    ) -> Self {
+        let first_tab = cx.new(|cx| HttpClient::new(window, cx, 0, &callbacks, preview));
+        Self {
+            url_subscriptions: vec![Self::subscribe_to_url(&first_tab, cx)],
+            tabs: vec![first_tab],
+            active_tab: 0,
+            tab_scroll: ScrollHandle::new(),
+            callbacks,
+        }
+    }
+
+    pub(super) fn tab(&self, id: u32) -> Option<Entity<HttpClient>> {
+        self.tabs.get(id as usize).cloned()
+    }
+
+    fn subscribe_to_url(tab: &Entity<HttpClient>, cx: &mut Context<Self>) -> Subscription {
+        let url = tab.read(cx).url.clone();
+        cx.subscribe(&url, |_, _, event, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        })
+    }
+
+    fn select_tab(&mut self, id: u32, cx: &mut Context<Self>) {
+        self.active_tab = id;
+        self.tab_scroll.scroll_to_item(id as usize);
+        cx.notify();
+    }
+
+    fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let id = self.tabs.len() as u32;
+        let tab = cx.new(|cx| HttpClient::new(window, cx, id, &self.callbacks, Preview::default()));
+        tab.read(cx).url.read(cx).focus_handle(cx).focus(window, cx);
+        self.url_subscriptions
+            .push(Self::subscribe_to_url(&tab, cx));
+        self.tabs.push(tab);
+        self.select_tab(id, cx);
+        if let Err(error) = self.callbacks.load_request.call2(
+            &JsValue::UNDEFINED,
+            &JsValue::from(id),
+            &JsValue::from_str(""),
+        ) {
+            self.tabs[id as usize].update(cx, |tab, cx| {
+                tab.set_request_loading(false, cx);
+                tab.finish_request_error(format!("Could not initialize request: {error:?}"), cx);
+            });
+        }
+    }
+}
+
+impl Render for Workspace {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = palette::get(cx);
+        let chrome = palette.toolbar;
+        let border = palette.separator;
+        let radius = cx.theme().radius;
+        let foreground = workspace_tab_foreground();
+        let tab_style = ButtonCustomVariant::new(cx).foreground(foreground);
+        let url_font = cx.theme().mono_font_family.clone();
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .font_family(cx.theme().font_family.clone())
+            .text_color(palette.foreground)
+            .child(
+                Toolbar::new("http-client-toolbar")
+                    .justify_end()
+                    .bg(chrome)
+                    .border_b_1()
+                    .border_color(border)
+                    .content(
+                        Button::new("http-client-overflow")
+                            .ghost()
+                            .with_size(Size::Small)
+                            .cursor_pointer()
+                            .icon(
+                                Icon::default().data(include_bytes!(
+                                    "../../../assets/icons/more-vertical.svg"
+                                )),
+                            )
+                            .tooltip("More actions")
+                            .accessibility_label("More actions")
+                            .dropdown_menu_with_anchor(Anchor::TopRight, |menu, _, _| {
+                                menu.with_size(Size::Small)
+                                    .item(PopupMenuItem::new("No actions yet").disabled(true))
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .id("http-client-tabs")
+                    .flex()
+                    .items_end()
+                    .flex_none()
+                    .h_9()
+                    .px_2()
+                    .gap_2()
+                    .bg(chrome)
+                    .child(
+                        Button::new("new-request-tab")
+                            .ghost()
+                            .with_size(Size::Small)
+                            .mb_1()
+                            .cursor_pointer()
+                            .icon(
+                                Icon::default()
+                                    .data(include_bytes!("../../../assets/icons/open-new-tab.svg"))
+                                    .text_color(palette.icon),
+                            )
+                            .tooltip("New request tab")
+                            .accessibility_label("New request tab")
+                            .on_click(cx.listener(|this, _, window, cx| this.add_tab(window, cx))),
+                    )
+                    .child(
+                        div()
+                            .id("request-workspace-tabs")
+                            .role(Role::TabList)
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .gap_1()
+                            .overflow_x_scroll()
+                            .track_scroll(&self.tab_scroll)
+                            .children(self.tabs.iter().enumerate().map(|(index, tab)| {
+                                let id = index as u32;
+                                let selected = self.active_tab == id;
+                                let background = workspace_tab_background(index);
+                                let url = tab.read(cx).url.read(cx).value();
+                                let name = if id == 0 {
+                                    "Request".to_owned()
+                                } else {
+                                    format!("Request {}", id + 1)
+                                };
+                                Button::new(("request-workspace-tab", index))
+                                    .custom(
+                                        tab_style.hover(background.opacity(0.8)).active(background),
+                                    )
+                                    .bg(background)
+                                    .rounded(ButtonRounded::None)
+                                    .rounded_tl(radius)
+                                    .rounded_tr(radius)
+                                    .h_8()
+                                    .w_40()
+                                    .px_2()
+                                    .cursor_pointer()
+                                    .role(Role::Tab)
+                                    .selected(selected)
+                                    .accessibility_label(if url.is_empty() {
+                                        name.clone()
+                                    } else {
+                                        format!("{name}, {url}")
+                                    })
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .min_w_0()
+                                            .flex()
+                                            .flex_col()
+                                            .line_height(rems(0.75))
+                                            .child(
+                                                div()
+                                                    .h_3()
+                                                    .text_size(rems(0.625))
+                                                    .truncate()
+                                                    .when(selected, |title| title.font_semibold())
+                                                    .child(name),
+                                            )
+                                            .child(
+                                                div()
+                                                    .h_3()
+                                                    .font_family(url_font.clone())
+                                                    .text_size(rems(0.5625))
+                                                    .whitespace_nowrap()
+                                                    .overflow_hidden()
+                                                    .text_ellipsis_start()
+                                                    .child(url),
+                                            ),
+                                    )
+                                    .on_click(
+                                        cx.listener(move |this, _, _, cx| this.select_tab(id, cx)),
+                                    )
+                            })),
+                    ),
+            )
+            .child(self.tabs[self.active_tab as usize].clone())
+    }
+}
+
+fn exchange_header() -> Div {
+    div().flex_none().flex().items_center().h(px(30.)).mb_2()
+}
+
+fn detail(name: &str, value: &str) -> impl IntoElement + use<> {
     div()
         .flex()
         .gap_4()

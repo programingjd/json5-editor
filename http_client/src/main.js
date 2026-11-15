@@ -11,17 +11,16 @@ import init, {
   run, set_color_scheme, set_request_loading,
 } from './wasm/gpui_http_client_web.js';
 
-async function start(transport) {
-  const stopHistory = preserveHistoryMouseButtons();
-  const [{ inter, mono, interItalic }] = await Promise.all([loadFonts(), init()]);
+function createTabDocuments(tab, transport) {
   const bodyEditor = (response, metadata) => ({
-    prepare_json5_file: (id, view) => prepare_body(response, id, view),
-    advance_json5_file_preparation: id => advance_body_preparation(response, id),
-    json5_file_preparation_progress: id => body_preparation_progress(response, id),
-    cancel_json5_file_preparation: id => cancel_body_preparation(response, id),
+    prepare_json5_file: (id, view) => prepare_body(tab, response, id, view),
+    advance_json5_file_preparation: id => advance_body_preparation(tab, response, id),
+    json5_file_preparation_progress: id => body_preparation_progress(tab, response, id),
+    cancel_json5_file_preparation: id => cancel_body_preparation(tab, response, id),
     open_prepared_json5_file: (_name, _view, highlights, folds, brackets, diagnostics) =>
-      install_body(response, metadata(), highlights, folds, brackets, diagnostics),
-    apply_syntax_result: apply_syntax,
+      install_body(tab, response, metadata(), highlights, folds, brackets, diagnostics),
+    apply_syntax_result: (revision, highlights, folds, brackets, diagnostics) =>
+      apply_syntax(tab, revision, highlights, folds, brackets, diagnostics),
   });
   let pendingBody;
   const rejectRequestBody = error => {
@@ -36,27 +35,27 @@ async function start(transport) {
     pendingBody?.resolve(body);
     pendingBody = undefined;
   }, rejectRequestBody, {
-    onLoading: load => set_request_loading(!!load),
+    onLoading: load => set_request_loading(tab, !!load),
     onSaveError: rejectRequestBody,
   });
-  const loadRequest = body => queueMicrotask(() => {
+  const loadRequest = body => {
     try { requestDocuments.openText('HTTP request', body); }
     catch (error) {
       requestDocuments.abortOpen();
-      set_request_loading(false);
+      set_request_loading(tab, false);
       rejectRequestBody(error);
     }
-  });
+  };
   const queueEdit = payload => requestDocuments.edit(JSON.parse(payload));
   let responseMetadata;
   const reportResponseError = error => {
     responseMetadata = undefined;
-    finish_request_error(error?.message ?? String(error));
+    finish_request_error(tab, error?.message ?? String(error));
   };
   const responseDocuments = new DocumentClient(
     bodyEditor(true, () => responseMetadata), undefined, reportResponseError);
   const openResponse = ({ body, ...metadata }) => {
-    begin_response();
+    begin_response(tab);
     responseMetadata = JSON.stringify(metadata);
     try {
       responseDocuments.openText('HTTP response', body);
@@ -75,11 +74,32 @@ async function start(transport) {
       .then(openResponse)
       .catch(reportResponseError);
   };
+  const dispose = () => {
+    for (const documents of [requestDocuments, responseDocuments]) {
+      documents.abortOpen();
+      documents.worker?.terminate();
+    }
+  };
+  return { loadRequest, queueEdit, openResponse, reportResponseError, send, dispose };
+}
+
+async function start(transport) {
+  const stopHistory = preserveHistoryMouseButtons();
+  const [{ inter, mono, interItalic }] = await Promise.all([loadFonts(), init()]);
+  const tabs = new Map();
+  const documentsFor = tab => {
+    if (!tabs.has(tab)) tabs.set(tab, createTabDocuments(tab, transport));
+    return tabs.get(tab);
+  };
+  const loadRequest = (tab, body) => queueMicrotask(() => documentsFor(tab).loadRequest(body));
+  const queueEdit = (tab, payload) => documentsFor(tab).queueEdit(payload);
+  const send = (tab, payload) => documentsFor(tab).send(payload);
   const { body, ...initialMetadata } = preview.response;
   const ready = () => queueMicrotask(() => {
-    loadRequest(preview.request);
-    try { openResponse(preview.response); }
-    catch (error) { reportResponseError(error); }
+    const documents = documentsFor(0);
+    documents.loadRequest(preview.request);
+    try { documents.openResponse(preview.response); }
+    catch (error) { documents.reportResponseError(error); }
   });
   run(readColorScheme().dark, inter, mono, interItalic, send, queueEdit, loadRequest, ready,
     JSON.stringify({ ...preview, response: initialMetadata }));
@@ -91,10 +111,7 @@ async function start(transport) {
   });
   window.addEventListener('pagehide', event => {
     if (event.persisted) return;
-    requestDocuments.abortOpen();
-    requestDocuments.worker?.terminate();
-    responseDocuments.abortOpen();
-    responseDocuments.worker?.terminate();
+    for (const documents of tabs.values()) documents.dispose();
     stopTheme();
     stopHistory();
   });
