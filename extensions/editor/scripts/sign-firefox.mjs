@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const workspace = fileURLToPath(new URL('../../../', import.meta.url));
 const args = process.argv.slice(2);
 if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
   console.log('Usage: npm run sign:firefox\nRebuilds the extension, prompts for AMO JWT credentials, and signs for unlisted distribution.\nSigned XPI: standalone/target/firefox-signed/');
@@ -21,7 +22,7 @@ try {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Run this script in an interactive terminal to enter signing credentials.');
   }
-  const require = createRequire(new URL('../../www/package.json', import.meta.url));
+  const require = createRequire(path.join(workspace, 'www/package.json'));
   const { input, password } = await import(pathToFileURL(require.resolve('@inquirer/prompts')).href);
   const build = spawnSync(process.execPath, [path.join(root, 'scripts/build.mjs')], {
     cwd: root, stdio: 'inherit',
@@ -36,8 +37,8 @@ try {
   issuer = (await input({ message: 'JWT issuer:', validate: value => !!value.trim() || 'Enter the JWT issuer.' })).trim();
   secret = (await password({ message: 'JWT secret:', mask: '*', validate: value => !!value.trim() || 'Enter the JWT secret.' })).trim();
 
-  const work = path.resolve(root, '../target/build-tools/firefox-signing');
-  const artifactsDir = path.resolve(root, '../target/firefox-signed');
+  const work = path.join(workspace, 'target/build-tools/firefox-signing');
+  const artifactsDir = path.join(workspace, 'target/firefox-signed');
   await mkdir(work, { recursive: true });
   await mkdir(artifactsDir, { recursive: true });
   // web-ext writes upload state in its source directory; keep it out of dist.

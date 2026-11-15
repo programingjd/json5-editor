@@ -292,6 +292,7 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(crate) extras: M::Extras,
     pub(super) focus_handle: FocusHandle,
     selection_focus: Option<WeakFocusHandle>,
+    clipboard_paste_handler: Option<Rc<dyn Fn(&Self, &str) -> bool>>,
     context_menu_selection_focus: Option<WeakFocusHandle>,
     pub(super) mode: LayoutMode,
     pub(super) text: Rope,
@@ -592,6 +593,16 @@ impl<M: InputModeKind> InputBaseState<M> {
         cx.notify();
     }
 
+    /// Let a host handle pasted text before the input inserts it.
+    pub fn set_clipboard_paste_handler(&mut self, handler: impl Fn(&Self, &str) -> bool + 'static) {
+        self.clipboard_paste_handler = Some(Rc::new(handler));
+    }
+
+    fn handle_clipboard_paste(&self, text: &str) -> bool {
+        self.is_editable()
+            && self.clipboard_paste_handler.as_ref().is_some_and(|handler| handler(self, text))
+    }
+
     pub fn has_selection_focus(&self, window: &Window, cx: &App) -> bool {
         self.focus_handle.is_focused(window)
             || [
@@ -648,6 +659,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             extras: M::Extras::default(),
             focus_handle: focus_handle.clone(),
             selection_focus: None,
+            clipboard_paste_handler: None,
             context_menu_selection_focus: None,
             text: "".into(),
             display_map: DisplayMap::new(text_style.font(), window.rem_size(), None),
@@ -2645,6 +2657,9 @@ impl<M: InputModeKind> InputBaseState<M> {
         let Some(mut new_text) = clipboard.text().filter(|text| !text.is_empty()) else {
             return;
         };
+        if self.handle_clipboard_paste(&new_text) {
+            return;
+        }
         // A paste is one atomic edit, never part of a typing run.
         self.undo_manager.set_pending_intent(EditIntent::Atomic);
 
@@ -3883,6 +3898,14 @@ impl<M: InputModeKind> InputBaseState<M> {
 }
 
 impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
+    fn paste(&mut self, item: ClipboardItem, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = item.text()
+            && !self.handle_clipboard_paste(&text)
+        {
+            self.replace_text_in_range(None, &text, window, cx);
+        }
+    }
+
     fn text_for_range(
         &mut self,
         range_utf16: Range<usize>,

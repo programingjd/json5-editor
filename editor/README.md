@@ -12,7 +12,7 @@ or `null` to use the editor's example. Response streams supply `name`, `read()`
 and `cancel()`; `takePort()` transfers the data channel to the parser worker,
 and `close()` releases the control channel. Loading starts after GPUI is ready.
 
-`www/src/main.js` starts the standalone app. `extensions/src/main.js` passes
+`www/src/main.js` starts the standalone app. `extensions/editor/src/main.js` passes
 the extension's response-host adapter to the same API. Both use `index.html`
 from this module, with their own launcher selected by the build configuration;
 neither depends on the other launcher or its generated output.

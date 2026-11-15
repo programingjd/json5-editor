@@ -291,7 +291,7 @@ impl EditorSearchPanel {
         )
         .icon(
             Icon::default()
-                .data(include_bytes!("../assets/icons/search-history.svg"))
+                .data(include_bytes!("../../../assets/icons/search-history.svg"))
                 .size_4(),
         )
         .w_6()
@@ -442,7 +442,7 @@ impl EditorSearchPanel {
                                         panel_button("clear-search", cx)
                                             .disabled(self.input.read(cx).value().is_empty())
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/close.svg"
+                                                "../../../assets/icons/close.svg"
                                             )))
                                             .accessibility_label("Clear search")
                                             .tooltip("Clear search")
@@ -458,7 +458,7 @@ impl EditorSearchPanel {
                                         panel_button("newline-search", cx)
                                             .disabled(self.regex_mode)
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/new-line.svg"
+                                                "../../../assets/icons/new-line.svg"
                                             )))
                                             .accessibility_label("Insert newline in search")
                                             .tooltip_with(|window, cx| {
@@ -476,7 +476,7 @@ impl EditorSearchPanel {
                                     .child(
                                         panel_button("match-case", cx)
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/match-case.svg"
+                                                "../../../assets/icons/match-case.svg"
                                             )))
                                             .toggled(self.case_sensitive)
                                             .selected(self.case_sensitive)
@@ -491,7 +491,7 @@ impl EditorSearchPanel {
                                     .child(
                                         panel_button("regex-search", cx)
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/regex.svg"
+                                                "../../../assets/icons/regex.svg"
                                             )))
                                             .toggled(self.regex_mode)
                                             .selected(self.regex_mode)
@@ -530,7 +530,7 @@ impl EditorSearchPanel {
             .child(
                 panel_button("previous-search-match", cx)
                     .icon(
-                        Icon::default().data(include_bytes!("../assets/icons/chevron-up.svg")),
+                        Icon::default().data(include_bytes!("../../../assets/icons/chevron-up.svg")),
                     )
                     .disabled(self.total_matches == 0)
                     .accessibility_label("Previous match")
@@ -543,7 +543,7 @@ impl EditorSearchPanel {
                 panel_button("next-search-match", cx)
                     .icon(
                         Icon::default()
-                            .data(include_bytes!("../assets/icons/chevron-down.svg")),
+                            .data(include_bytes!("../../../assets/icons/chevron-down.svg")),
                     )
                     .disabled(self.total_matches == 0)
                     .accessibility_label("Next match")
@@ -555,7 +555,7 @@ impl EditorSearchPanel {
             .child(div().flex_1())
             .child(
                 panel_button("close-search", cx)
-                    .icon(Icon::default().data(include_bytes!("../assets/icons/close.svg")))
+                    .icon(Icon::default().data(include_bytes!("../../../assets/icons/close.svg")))
                     .accessibility_label("Close search")
                     .tooltip_with(|window, cx| {
                         crate::shortcuts::tooltip("Close search", "Escape", window, cx)
@@ -628,7 +628,7 @@ impl EditorSearchPanel {
                                         panel_button("clear-replacement", cx)
                                             .disabled(self.replacement.read(cx).value().is_empty())
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/close.svg"
+                                                "../../../assets/icons/close.svg"
                                             )))
                                             .accessibility_label("Clear replacement")
                                             .tooltip("Clear replacement")
@@ -644,7 +644,7 @@ impl EditorSearchPanel {
                                         panel_button("newline-replacement", cx)
                                             .disabled(self.regex_mode)
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/new-line.svg"
+                                                "../../../assets/icons/new-line.svg"
                                             )))
                                             .accessibility_label("Insert newline in replacement")
                                             .tooltip_with(|window, cx| {
@@ -662,7 +662,7 @@ impl EditorSearchPanel {
                                     .child(
                                         panel_button("preserve-replacement-case", cx)
                                             .icon(Icon::default().data(include_bytes!(
-                                                "../assets/icons/preserve-case.svg"
+                                                "../../../assets/icons/preserve-case.svg"
                                             )))
                                             .toggled(self.preserve_case)
                                             .selected(self.preserve_case)
@@ -726,9 +726,9 @@ impl Render for EditorSearchPanel {
                     .child(
                         panel_button("toggle-replace", cx)
                             .icon(Icon::default().data(if self.replace_expanded {
-                                include_bytes!("../assets/icons/chevron-down.svg") as &[u8]
+                                include_bytes!("../../../assets/icons/chevron-down.svg") as &[u8]
                             } else {
-                                include_bytes!("../assets/icons/chevron-right.svg") as &[u8]
+                                include_bytes!("../../../assets/icons/chevron-right.svg") as &[u8]
                             }))
                             .toggled(self.replace_expanded)
                             .accessibility_label("Toggle replace row")

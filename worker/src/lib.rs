@@ -2,12 +2,12 @@ use serde::Deserialize;
 use tree_sitter::{InputEdit, Point};
 use wasm_bindgen::prelude::*;
 
-#[path = "../../src/json5_format.rs"]
+#[path = "../../apps/editor/src/json5_format.rs"]
 mod json5_format;
 mod json_conversion;
 mod parser;
 mod stream_preview;
-#[path = "../../src/syntax_data.rs"]
+#[path = "../../apps/editor/src/syntax_data.rs"]
 mod syntax_data;
 
 #[derive(Deserialize)]

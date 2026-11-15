@@ -9,6 +9,8 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/component/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/kit/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/worker/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/editor/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/http_client/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

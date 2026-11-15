@@ -192,7 +192,7 @@ impl Shortcut {
 const SECTIONS: &[(&str, &[u8], &[Shortcut])] = &[
     (
         "Files",
-        include_bytes!("../assets/icons/file-set.svg"),
+        include_bytes!("../../../assets/icons/file-set.svg"),
         &[
             Shortcut::new("Open file", OPEN),
             Shortcut::new("Download file", SAVE),
@@ -201,7 +201,7 @@ const SECTIONS: &[(&str, &[u8], &[Shortcut])] = &[
     ),
     (
         "Editing",
-        include_bytes!("../assets/icons/edit.svg"),
+        include_bytes!("../../../assets/icons/edit.svg"),
         &[
             Shortcut::new("Undo", "Ctrl/Cmd+Z"),
             Shortcut::new("Redo", "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"),
@@ -212,7 +212,7 @@ const SECTIONS: &[(&str, &[u8], &[Shortcut])] = &[
     ),
     (
         "Caret/Cursor",
-        include_bytes!("../assets/icons/cursor-text.svg"),
+        include_bytes!("../../../assets/icons/cursor-text.svg"),
         &[
             Shortcut::new("Add caret at pointer", "Alt+Click"),
             Shortcut::new("Add caret above / below", "Alt+Shift+↑ or Alt+Shift+↓")
@@ -223,7 +223,7 @@ const SECTIONS: &[(&str, &[u8], &[Shortcut])] = &[
     ),
     (
         "Find and replace",
-        include_bytes!("../assets/icons/find.svg"),
+        include_bytes!("../../../assets/icons/find.svg"),
         &[
             Shortcut::new("Open or focus Find", "Ctrl/Cmd+F"),
             Shortcut::new("Open Find and replace", "Ctrl/Cmd+R"),
@@ -239,7 +239,7 @@ const SECTIONS: &[(&str, &[u8], &[Shortcut])] = &[
     ),
     (
         "Folding",
-        include_bytes!("../assets/icons/collapse-all.svg"),
+        include_bytes!("../../../assets/icons/collapse-all.svg"),
         &[
             Shortcut::new("Collapse all scopes", COLLAPSE_ALL),
             Shortcut::new("Expand all scopes", EXPAND_ALL),

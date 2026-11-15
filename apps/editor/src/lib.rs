@@ -8,11 +8,11 @@ use gpui_kit::component::{
     toolbar::{Toolbar, ToolbarGroup},
 };
 use gpui_kit::{
-    App, AppContext as _, Application, ApplicationHandle, Context, Entity, Focusable as _, Global,
+    App, AppContext as _, ApplicationHandle, Context, Entity, Focusable as _, Global,
     HighlightStyle, InteractiveElement as _, IntoElement, ParentElement, Render, SharedString,
     Styled as _, Window, WindowOptions, div, px, rgb,
 };
-use std::{borrow::Cow, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
 mod convert_action;
@@ -29,6 +29,8 @@ mod status_bar;
 mod streaming;
 mod syntax_data;
 mod tree_sitter_highlighter;
+mod web_support;
+use web_support::{decode_font, web_application};
 
 gpui_kit::actions!(
     json5_editor,
@@ -130,6 +132,7 @@ impl Json5EditorApp {
                     tree_sitter_highlighter::TreeSitterHighlighter::new(
                         language,
                         syntax_for_factory.clone(),
+                        Some(Rc::new(queue_editor_syntax_edit)),
                     )
                     .map(|highlighter| Box::new(highlighter) as Box<_>)
                 }),
@@ -412,7 +415,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/undo.svg")),
+                                            .data(include_bytes!("../../../assets/icons/undo.svg")),
                                     )
                                     .accessibility_label("Undo")
                                     .tooltip_with(|window, cx| {
@@ -438,7 +441,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/redo.svg")),
+                                            .data(include_bytes!("../../../assets/icons/redo.svg")),
                                     )
                                     .accessibility_label("Redo")
                                     .tooltip_with(|window, cx| {
@@ -468,7 +471,7 @@ impl Render for Json5EditorApp {
                                     .custom(button_style.clone())
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(Icon::default().data(include_bytes!(
-                                        "../assets/icons/collapse-all.svg"
+                                        "../../../assets/icons/collapse-all.svg"
                                     )))
                                     .accessibility_label("Collapse all scopes")
                                     .tooltip_with(|window, cx| {
@@ -491,7 +494,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default().data(include_bytes!(
-                                            "../assets/icons/expand-all.svg"
+                                            "../../../assets/icons/expand-all.svg"
                                         )),
                                     )
                                     .accessibility_label("Expand all scopes")
@@ -515,7 +518,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default().data(include_bytes!(
-                                            "../assets/icons/collapse.svg"
+                                            "../../../assets/icons/collapse.svg"
                                         )),
                                     )
                                     .accessibility_label("Collapse current scope")
@@ -539,7 +542,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/expand.svg")),
+                                            .data(include_bytes!("../../../assets/icons/expand.svg")),
                                     )
                                     .accessibility_label("Expand current scope")
                                     .tooltip_with(|window, cx| {
@@ -562,7 +565,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/search.svg")),
+                                            .data(include_bytes!("../../../assets/icons/search.svg")),
                                     )
                                     .accessibility_label("Search")
                                     .tooltip_with(|window, cx| {
@@ -584,7 +587,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default().data(include_bytes!(
-                                            "../assets/icons/replace.svg"
+                                            "../../../assets/icons/replace.svg"
                                         )),
                                     )
                                     .accessibility_label("Replace")
@@ -628,7 +631,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/open.svg")),
+                                            .data(include_bytes!("../../../assets/icons/open.svg")),
                                     )
                                     .accessibility_label("Open file")
                                     .tooltip_with(|window, cx| {
@@ -646,7 +649,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default()
-                                            .data(include_bytes!("../assets/icons/revert.svg")),
+                                            .data(include_bytes!("../../../assets/icons/revert.svg")),
                                     )
                                     .accessibility_label("Revert file")
                                     .tooltip("Revert to originally opened content")
@@ -671,7 +674,7 @@ impl Render for Json5EditorApp {
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
                                         Icon::default().data(include_bytes!(
-                                            "../assets/icons/download.svg"
+                                            "../../../assets/icons/download.svg"
                                         )),
                                     )
                                     .accessibility_label("Download file")
@@ -696,11 +699,11 @@ impl Render for Json5EditorApp {
                                     .child(
                                         Icon::default()
                                             .data(if dark {
-                                                include_bytes!("../assets/icons/dark-theme.svg")
+                                                include_bytes!("../../../assets/icons/dark-theme.svg")
                                                     .as_slice()
                                             } else {
                                                 include_bytes!(
-                                                    "../assets/icons/light-theme.svg"
+                                                    "../../../assets/icons/light-theme.svg"
                                                 )
                                                 .as_slice()
                                             })
@@ -803,21 +806,6 @@ fn safe_file_name(name: &str) -> String {
     }
 }
 
-fn web_application() -> Application {
-    use gpui_kit::web::{CanvasFontFallback, WebBackendPreference, WebPlatform};
-    use std::sync::Arc;
-
-    let platform = Rc::new(WebPlatform::new_with_backend_and_font_fallback(
-        false,
-        WebBackendPreference::Auto,
-        CanvasFontFallback::EmojiAndCjk,
-    ));
-    let http_client = Arc::new(platform.fetch_http_client());
-    Application::with_platform(platform)
-        .with_http_client(http_client)
-        .with_assets(gpui_kit::assets::Assets::new(""))
-}
-
 fn search_match_background(cx: &App) -> gpui_kit::Hsla {
     palette::get(cx).search
 }
@@ -859,37 +847,7 @@ fn bordered_action_button(id: &'static str, label: &'static str, cx: &App) -> Bu
 }
 
 fn set_theme(dark: bool, cx: &mut App) {
-    use gpui_kit::component::theme::{Theme, ThemeMode};
-
-    let mode = if dark {
-        ThemeMode::Dark
-    } else {
-        ThemeMode::Light
-    };
-    Theme::update(cx, |theme| {
-        theme.font_family = "Inter".into();
-        theme.mono_font_family = "CommitMono".into();
-    });
-    Theme::change(mode, None, cx);
-    let palette = palette::install(dark, cx);
-    Theme::update(cx, |theme| {
-        theme.colors.background = palette.background;
-        theme.colors.foreground = palette.foreground;
-        theme.colors.muted = palette.toolbar;
-        theme.colors.muted_foreground = palette.icon;
-        theme.colors.popover = palette.popover;
-        theme.colors.popover_foreground = palette.ui_foreground;
-        theme.colors.link = palette.link;
-        theme.colors.border = palette.border;
-        theme.colors.selection = palette.selection;
-        theme.colors.caret = palette.caret;
-        theme.colors.input = palette.background;
-        if !dark {
-            theme.colors.red = palette.error;
-            theme.colors.danger = palette.error;
-        }
-        theme.highlight_theme = std::sync::Arc::new(palette.syntax.clone());
-    });
+    let palette = palette::apply_theme(dark, cx);
     if let Some(editor) = cx
         .try_global::<Json5EditorGlobal>()
         .map(|global| global.editor.clone())
@@ -951,14 +909,6 @@ pub fn run(
         *application.borrow_mut() = Some(app.run_embedded(launch));
     });
     Ok(())
-}
-
-fn decode_font(family: &str, woff2: &[u8]) -> Result<Cow<'static, [u8]>, JsValue> {
-    wuff::decompress_woff2(woff2)
-        .map(Cow::Owned)
-        .map_err(|error| {
-            JsValue::from_str(&format!("Failed to decode {family} WOFF2 font: {error:?}"))
-        })
 }
 
 // Page-level shortcuts must work independently of the DOM keyboard receiver.
@@ -1190,6 +1140,16 @@ pub fn apply_syntax_result(
             });
         });
     });
+}
+
+fn queue_editor_syntax_edit(revision: u32, edit: gpui_kit::component::input::InputEdit, text: &ropey::Rope) {
+    let replacement = text.slice(edit.start_byte..edit.new_end_byte).to_string();
+    queue_syntax_edit(
+        revision, edit.start_byte, edit.old_end_byte, &replacement,
+        edit.start_position.row, edit.start_position.column,
+        edit.old_end_position.row, edit.old_end_position.column,
+        edit.new_end_position.row, edit.new_end_position.column,
+    );
 }
 
 #[wasm_bindgen(module = "/src/json5_editor_bridge.js")]

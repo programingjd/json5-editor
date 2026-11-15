@@ -10,6 +10,8 @@
     "dev:debug": "npm run build:wasm:debug && vite",
     "build": "npm run build:wasm && vite build",
     "build:web": "vite build",
+    "build:http-client": "npm run build:wasm -- --http-client && vite build --config ../http_client/vite.config.mjs",
+    "preview:http-client": "vite preview --config ../http_client/vite.config.mjs",
     "preview": "vite preview",
     "test": "node --test ../editor/src/*.test.js"
   },

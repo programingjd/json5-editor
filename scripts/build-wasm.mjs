@@ -7,11 +7,13 @@ import { prepareSbom } from './prepare-sbom.mjs';
 import { generateSourceLicenses } from './generate-source-licenses.mjs';
 
 const args = process.argv.slice(2);
-if (args.length > 1 || args.some(arg => !['--debug', '--release'].includes(arg))) {
-  console.error('Usage: npm run build:wasm -- [--release|--debug]');
+const profiles = args.filter(arg => ['--debug', '--release'].includes(arg));
+const httpClient = args.includes('--http-client');
+if (profiles.length > 1 || args.length !== profiles.length + Number(httpClient)) {
+  console.error('Usage: npm run build:wasm -- [--release|--debug] [--http-client]');
   process.exit(1);
 }
-const profile = args[0] === '--debug' ? 'dev' : 'release';
+const profile = profiles[0] === '--debug' ? 'dev' : 'release';
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const containerfile = fileURLToPath(new URL('./Containerfile', import.meta.url));
 const image = 'localhost/gpui-json5-editor-builder:nightly';
@@ -64,7 +66,8 @@ async function build() {
     '--volume', `${volumes[1]}:/usr/local/cargo/registry`,
     '--volume', `${volumes[2]}:/usr/local/rustup`,
     '--workdir', '/workspace/standalone', '--env', 'CARGO_TARGET_DIR=/target',
-    image, 'bash', '/workspace/standalone/scripts/build-in-container.sh', profile]);
+    image, 'bash', '/workspace/standalone/scripts/build-in-container.sh', profile,
+    httpClient ? 'http_client' : 'editor']);
   await generateSourceLicenses();
 }
 

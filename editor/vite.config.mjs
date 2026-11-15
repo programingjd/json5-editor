@@ -12,7 +12,9 @@ const projectRoot = path.resolve(editorRoot, '..');
 // Both entry points use the existing, locked npm build toolchain.
 const require = createRequire(new URL('../www/package.json', import.meta.url));
 
-export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
+export async function createEditorConfig(rootUrl, {
+  outDir = 'dist', wasmModule = 'gpui_json5_editor_web',
+} = {}) {
   const wasm = (await import(pathToFileURL(require.resolve('vite-plugin-wasm')).href)).default;
   const { viteStaticCopy } = await import(pathToFileURL(require.resolve('vite-plugin-static-copy')).href);
   const appRoot = fileURLToPath(rootUrl);
@@ -30,7 +32,11 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
   return {
     root: editorRoot,
     publicDir: false,
-    resolve: { alias: { '/app-entry.js': path.join(appRoot, 'src/main.js') } },
+    resolve: { alias: {
+      '/app-entry.js': path.join(appRoot, 'src/main.js'),
+      '/gpui-browser-input-focus.js': path.join(editorRoot, 'src/browser-input-focus.js'),
+      '/gpui-clipboard.js': path.join(editorRoot, 'src/clipboard.js'),
+    } },
     plugins: [
       {
         name: 'editor-page-assets',
@@ -48,10 +54,10 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
           }
         },
       },
-      wasmCsp(),
-      browserGpuDefaults(),
-      browserClipboard(),
-      browserInputFocus(),
+      wasmCsp(wasmModule),
+      browserGpuDefaults(wasmModule),
+      browserClipboard(wasmModule),
+      browserInputFocus(wasmModule),
       wasm(),
       viteStaticCopy({
         targets: [
@@ -110,7 +116,7 @@ export async function createEditorConfig(rootUrl, { outDir = 'dist' } = {}) {
       },
     },
     optimizeDeps: {
-      exclude: ['./src/wasm/gpui_json5_editor_web.js', './src/worker-wasm/gpui_json5_processor.js'],
+      exclude: [`./src/wasm/${wasmModule}.js`, './src/worker-wasm/gpui_json5_processor.js'],
     },
   };
 }

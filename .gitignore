@@ -1,6 +1,8 @@
 /editor/src/wasm/
 /editor/src/worker-wasm/
 /www/dist/
+/http_client/dist/
+/http_client/src/wasm/
 /.tools/
 /patches/
 /target/

@@ -80,7 +80,7 @@ impl InfoDialogs {
         cx: &mut App,
     ) -> Entity<Self> {
         let notices: NoticeSections =
-            serde_json::from_str(include_str!("../assets/dependency-notices.json"))
+            serde_json::from_str(include_str!("../../../assets/dependency-notices.json"))
                 .expect("Generated dependency notices must be valid JSON");
         cx.new(|cx| {
             let mut convert = |notice: RawNotice| DependencyNotice {
@@ -117,7 +117,7 @@ impl InfoDialogs {
                 cancel_focus: cx.focus_handle().tab_stop(true),
                 jetbrains_logo: std::sync::Arc::new(gpui_kit::Image::from_bytes(
                     gpui_kit::ImageFormat::Svg,
-                    include_bytes!("../assets/icons/jetbrains.svg").to_vec(),
+                    include_bytes!("../../../assets/icons/jetbrains.svg").to_vec(),
                 )),
                 bom_focus: cx.focus_handle().tab_stop(true),
                 sbom_url,
@@ -186,7 +186,7 @@ impl InfoDialogs {
             .with_size(Size::Small)
             .custom(crate::toolbar_button_style(cx))
             .rounded(ButtonRounded::Small)
-            .icon(Icon::default().data(include_bytes!("../assets/icons/more-vertical.svg")))
+            .icon(Icon::default().data(include_bytes!("../../../assets/icons/more-vertical.svg")))
             .accessibility_label("More actions")
             .tooltip("More actions")
             .dropdown_menu(move |menu, window, cx| {
@@ -212,11 +212,11 @@ impl InfoDialogs {
                                         Icon::default()
                                             .data(match page {
                                                 InfoPage::Shortcuts => include_bytes!(
-                                                    "../assets/icons/keyboard.svg"
+                                                    "../../../assets/icons/keyboard.svg"
                                                 )
                                                 .as_slice(),
                                                 InfoPage::About => {
-                                                    include_bytes!("../assets/icons/help.svg")
+                                                    include_bytes!("../../../assets/icons/help.svg")
                                                         .as_slice()
                                                 }
                                                 InfoPage::Revert => unreachable!(),
@@ -368,7 +368,7 @@ impl InfoDialogs {
                             .cursor_pointer()
                             .child(
                                 Icon::default()
-                                    .data(include_bytes!("../assets/icons/zed-logo.svg"))
+                                    .data(include_bytes!("../../../assets/icons/zed-logo.svg"))
                                     .size_4()
                                     .cursor_pointer(),
                             )
@@ -397,7 +397,7 @@ impl InfoDialogs {
                     .text_xs()
                     .child(
                         Icon::default()
-                            .data(include_bytes!("../assets/icons/vcs.svg"))
+                            .data(include_bytes!("../../../assets/icons/vcs.svg"))
                             .size_4(),
                     )
                     .child(div().flex_1().min_w_0().child("Version"))
@@ -411,7 +411,7 @@ impl InfoDialogs {
                     .text_xs()
                     .child(
                         Icon::default()
-                            .data(include_bytes!("../assets/icons/folder-github.svg"))
+                            .data(include_bytes!("../../../assets/icons/folder-github.svg"))
                             .size_4(),
                     )
                     .child(div().flex_1().min_w_0().child("Source code"))
@@ -436,7 +436,7 @@ impl InfoDialogs {
             .child(
                 self.credits_section(
                     "Theme",
-                    include_bytes!("../assets/icons/palette.svg"),
+                    include_bytes!("../../../assets/icons/palette.svg"),
                     &[],
                     window,
                     cx,
@@ -480,7 +480,7 @@ impl InfoDialogs {
             .child(credits_separator(cx))
             .child(self.credits_section(
                 "Fonts",
-                include_bytes!("../assets/icons/font.svg"),
+                include_bytes!("../../../assets/icons/font.svg"),
                 &self.fonts,
                 window,
                 cx,
@@ -489,7 +489,7 @@ impl InfoDialogs {
             .child(
                 self.credits_section(
                     "Libraries",
-                    include_bytes!("../assets/icons/library.svg"),
+                    include_bytes!("../../../assets/icons/library.svg"),
                     &self.libraries,
                     window,
                     cx,
@@ -650,7 +650,7 @@ impl Render for InfoDialogs {
                                 .p(rems(0.46875))
                                 .child(
                                     Icon::default()
-                                        .data(include_bytes!("../assets/icons/close.svg"))
+                                        .data(include_bytes!("../../../assets/icons/close.svg"))
                                         .size(rems(1.3125))
                                         .cursor_pointer(),
                                 )

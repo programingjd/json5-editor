@@ -1,7 +1,7 @@
 # JSON5 Editor browser extension
 
 Builds separate Manifest V3 extensions for Chromium and Firefox. Both package
-the shared `../editor/` module and run the same GPUI editor, parser worker, fonts,
+the shared `../../editor/` module and run the same GPUI editor, parser worker, fonts,
 folding, diagnostics, search, and save UI.
 
 - `dist/`: Chrome, Edge and compatible Chromium 128+ browsers, using a service
@@ -18,15 +18,15 @@ scripts/build.bat
 
 or
 ```shell
-scripts/build.sh
+sh scripts/build.sh
 ```
 
 This rebuilds the parent project (including optimized WASM) once, then packages both
 distributions. 
 
 Both browser manifests get their version automatically from `[package].version`
-in `../Cargo.toml`. Update that version before signing a new release; there is
-no separate version to maintain in `manifest.template.json`. Use a numeric
+in `apps/editor/Cargo.toml` at the repository root. Update that version before
+signing a new release. Use a numeric
 `major.minor.patch` release version supported by both browsers.
 
 To build the extension entry point using the existing WASM modules:
@@ -36,11 +36,12 @@ npm run build
 ```
 
 For Chromium, open `chrome://extensions` or `edge://extensions`, enable
-**Developer mode**, choose **Load unpacked**, and select `../extensions/dist`.
+**Developer mode**, choose **Load unpacked**, and select `extensions/editor/dist/`
+from the repository root.
 
 For Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
-Add-on**, and select **../extensions/dist-firefox/manifest.json**. Allow access to
-the endpoint's host if Firefox asks. Temporary add-ons are removed on browser
+Add-on**, and select `extensions/editor/dist-firefox/manifest.json` from the
+repository root. Allow access to the endpoint's host if Firefox asks. Temporary add-ons are removed on browser
 restart; permanent installation requires a signed package.<br>
 
 ## Response handling

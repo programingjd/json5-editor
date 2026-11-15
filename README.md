@@ -21,8 +21,9 @@ project. Most of the application is Rust compiled to **WebAssembly**, using
 Additional credits and the generated software bill of materials are available
 in the editor's **About** dialog.
 
-The shared browser editor lives in [`editor/`](editor/README.md). The standalone
-app in `www/` and the browser extensions in `extensions/` each have a small
+The Rust editor crate lives in `apps/editor/`. Its shared browser runtime lives
+in [`editor/`](editor/README.md). The standalone
+app in `www/` and the browser extensions in `extensions/editor/` each have a small
 entry point that imports it. Both use the same WASM, document worker, fonts and
 UI; the extension supplies its response stream through the startup API.
 
@@ -76,30 +77,37 @@ Serve the generated `www/dist/` directory with a static web server, or use
 `npm run build:web` reuses the existing WASM files and needs no container.
 
 
+## HTTP client preview
+
+From `www/`, run `npm run build:http-client`, then
+`npm run preview:http-client`. The preview opens on port 3011 and uses a sample
+transport for the request and response panes. The web app lives in `http_client/`
+and builds to `http_client/dist/`. Its Rust crate is in `apps/http_client/`.
+
 ## Browser extension
 
-After installing the dependencies above, build both extension packages from 
-the `extensions/` directory:
+After installing the dependencies above, build both extension packages from
+the `extensions/editor/` directory:
 
 ```shell
-cd ../extensions
+cd ../extensions/editor
 npm run build:all
 ```
 
-This produces `extensions/dist/` for Chromium and `extensions/dist-firefox/` for
-Firefox.
+This produces `extensions/editor/dist/` for Chromium and
+`extensions/editor/dist-firefox/` for Firefox.
 
-See the [extension README](extensions/README.md) for loading instructions.
+See the [extension README](extensions/editor/README.md) for loading instructions.
 
 ## Release artifacts
 
 - Build the standalone app and both browser extensions first.
-- From the project root, run `node scripts/release_artifacts.mjs`,
-  `scripts\release_artifacts.bat` on Windows, or
-  `sh scripts/release_artifacts.sh` on macOS/Linux. Node.js 24+ is required;
+- From the project root, run `node scripts/generate-release-artifacts.mjs`,
+  `scripts\generate-release-artifacts.bat` on Windows, or
+  `sh scripts/generate-release-artifacts.sh` on macOS/Linux. Node.js 24+ is required;
   no additional dependencies are needed.
-- The script packages the contents of `extensions/dist/`,
-  `extensions/dist-firefox/`, and `www/dist/` with maximum ZIP compression as
+- The script packages the contents of `extensions/editor/dist/`,
+  `extensions/editor/dist-firefox/`, and `www/dist/` with maximum ZIP compression as
   `chrome-extension-unpacked.zip`, `firefox-extension-unpacked.zip`, and
   `standalone.zip`, respectively, in the project root.
 - It also copies `assets/sbom.json` to the project root as `sbom.json`.

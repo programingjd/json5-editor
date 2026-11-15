@@ -497,6 +497,13 @@ impl RenderOnce for Input {
         sync_focused_input_registry(&state, window, cx);
 
         state.ensure_highlighter_factory(crate::highlighter::input_highlighter_factory(), cx);
+        let editor_surface = self
+            .style
+            .background
+            .as_ref()
+            .and_then(|fill| fill.color())
+            .and_then(|background| background.as_solid())
+            .filter(|color| color.a == 1.);
         state.set_editor_style(
             gpui_base::input::InputEditorStyle {
                 foreground: cx.theme().foreground,
@@ -506,7 +513,7 @@ impl RenderOnce for Input {
                     .style
                     .editor_line_number
                     .unwrap_or(cx.theme().muted_foreground),
-                background: cx.theme().editor_background(),
+                background: editor_surface.unwrap_or_else(|| cx.theme().editor_background()),
                 border: cx.theme().border,
                 selection: cx.theme().selection,
                 caret: cx.theme().caret,
@@ -527,7 +534,8 @@ impl RenderOnce for Input {
                     .highlight_theme
                     .style
                     .editor_active_line_number,
-                editor_gutter_background: cx.theme().highlight_theme.style.editor_gutter_background,
+                editor_gutter_background: editor_surface
+                    .or(cx.theme().highlight_theme.style.editor_gutter_background),
                 fold_icon_renderer: Some({
                     let color = cx
                         .theme()

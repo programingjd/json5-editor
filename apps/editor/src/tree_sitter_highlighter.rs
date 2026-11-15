@@ -112,16 +112,24 @@ impl ParseSnapshot {
     }
 }
 
+pub(super) type SyntaxEditHandler = Rc<dyn Fn(u32, InputEdit, &Rope)>;
+
 pub(super) struct TreeSitterHighlighter {
     language: SharedString,
     snapshot: Rc<RefCell<ParseSnapshot>>,
+    on_edit: Option<SyntaxEditHandler>,
 }
 
 impl TreeSitterHighlighter {
-    pub(super) fn new(language: &str, snapshot: Rc<RefCell<ParseSnapshot>>) -> Option<Self> {
+    pub(super) fn new(
+        language: &str,
+        snapshot: Rc<RefCell<ParseSnapshot>>,
+        on_edit: Option<SyntaxEditHandler>,
+    ) -> Option<Self> {
         (language == "json5").then(|| Self {
             language: language.into(),
             snapshot,
+            on_edit,
         })
     }
 }
@@ -152,22 +160,14 @@ impl InputHighlighter for TreeSitterHighlighter {
                 return;
             }
             snapshot.adjust(edit);
-            snapshot.revision += 1;
+            if self.on_edit.is_some() {
+                snapshot.revision += 1;
+            }
             snapshot.revision
         };
-        let replacement = text.slice(edit.start_byte..edit.new_end_byte).to_string();
-        crate::queue_syntax_edit(
-            revision,
-            edit.start_byte,
-            edit.old_end_byte,
-            &replacement,
-            edit.start_position.row,
-            edit.start_position.column,
-            edit.old_end_position.row,
-            edit.old_end_position.column,
-            edit.new_end_position.row,
-            edit.new_end_position.column,
-        );
+        if let Some(on_edit) = &self.on_edit {
+            on_edit(revision, edit, text);
+        }
     }
 
     fn update_batch(

@@ -63,3 +63,38 @@ impl HighlightStyleResolver for Palette {
         }
     }
 }
+
+pub(super) fn apply_theme(dark: bool, cx: &mut App) -> Arc<Palette> {
+    use gpui_kit::component::theme::{Theme, ThemeMode};
+
+    let mode = if dark {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
+    Theme::update(cx, |theme| {
+        theme.font_family = "Inter".into();
+        theme.mono_font_family = "CommitMono".into();
+    });
+    Theme::change(mode, None, cx);
+    let palette = install(dark, cx);
+    Theme::update(cx, |theme| {
+        theme.colors.background = palette.background;
+        theme.colors.foreground = palette.foreground;
+        theme.colors.muted = palette.toolbar;
+        theme.colors.muted_foreground = palette.icon;
+        theme.colors.popover = palette.popover;
+        theme.colors.popover_foreground = palette.ui_foreground;
+        theme.colors.link = palette.link;
+        theme.colors.border = palette.border;
+        theme.colors.selection = palette.selection;
+        theme.colors.caret = palette.caret;
+        theme.colors.input = palette.background;
+        if !dark {
+            theme.colors.red = palette.error;
+            theme.colors.danger = palette.error;
+        }
+        theme.highlight_theme = std::sync::Arc::new(palette.syntax.clone());
+    });
+    palette
+}

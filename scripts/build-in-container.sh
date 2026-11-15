@@ -31,7 +31,11 @@ build_module() {
     fi
 }
 
-build_module json5-web-editor gpui_json5_editor_web /workspace/standalone/editor/src/wasm
+case "${2:-editor}" in
+    editor) build_module json5-web-editor gpui_json5_editor_web /workspace/standalone/editor/src/wasm ;;
+    http_client) build_module http_client gpui_http_client_web /workspace/standalone/http_client/src/wasm ;;
+    *) echo 'Expected editor or http_client.' >&2; exit 1 ;;
+esac
 build_module gpui-json5-processor gpui_json5_processor /workspace/standalone/editor/src/worker-wasm
 
 cargo +nightly run --locked --target host-tuple --manifest-path /workspace/standalone/tools/sbom/Cargo.toml -- /workspace/standalone

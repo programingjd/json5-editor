@@ -5,8 +5,8 @@ import { licenseArchive } from './license-archive.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const archives = [
-  ['extensions/dist', 'chrome-extension-unpacked.zip'],
-  ['extensions/dist-firefox', 'firefox-extension-unpacked.zip'],
+  ['extensions/editor/dist', 'chrome-extension-unpacked.zip'],
+  ['extensions/editor/dist-firefox', 'firefox-extension-unpacked.zip'],
   ['www/dist', 'standalone.zip'],
 ];
 
