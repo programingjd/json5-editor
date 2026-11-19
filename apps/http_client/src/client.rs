@@ -27,7 +27,7 @@ use crate::{
     DETAIL_PANE_MAX_WIDTH_REMS,
     buttons::{action_button, field_button, field_button_icon, field_button_label},
     palette,
-    query::localhost_url,
+    query::url_with_default_scheme,
     request_fields::{RequestFields, param_field, param_placeholder_color},
     response_headers::ResponseHeaders,
     timeline_foregrounds,
@@ -162,6 +162,7 @@ struct Response {
     preview: bool,
     status: u16,
     status_text: String,
+    https_upgrade_url: Option<String>,
     elapsed_ms: u32,
     bytes: usize,
     headers: Vec<(String, String)>,
@@ -284,6 +285,7 @@ pub(super) struct HttpClient {
     send: Function,
     tab_id: u32,
     pending: bool,
+    sent_http_url: Option<String>,
     archiving: bool,
     error: Option<String>,
     _url_subscription: Subscription,
@@ -304,16 +306,7 @@ impl HttpClient {
         });
         let params = cx.new(|cx| RequestFields::query(url.clone(), window, cx));
         let headers = cx.new(|cx| RequestFields::headers(&preview.headers, window, cx));
-        let response_headers = cx.new(|cx| {
-            ResponseHeaders::new(
-                preview
-                    .response
-                    .as_ref()
-                    .map_or(&[], |response| response.headers.as_slice()),
-                window,
-                cx,
-            )
-        });
+        let response_headers = cx.new(|cx| ResponseHeaders::new(&[], window, cx));
         let url_subscription = cx.subscribe_in(&url, window, |this, _, event, window, cx| {
             if matches!(event, InputEvent::Blur) {
                 this.normalize_url(window, cx);
@@ -396,7 +389,7 @@ impl HttpClient {
                 window.with_text_style(Some(response_font), |window| TextareaState::new(window, cx))
             }),
             download_response: callbacks.download_response.clone(),
-            response: preview.response,
+            response: None,
             error_timeline: Vec::new(),
             timeline_scroll: ScrollHandle::new(),
             response_loading: false,
@@ -407,6 +400,7 @@ impl HttpClient {
             send: callbacks.send.clone(),
             tab_id,
             pending: false,
+            sent_http_url: None,
             archiving: false,
             error: None,
             _url_subscription: url_subscription,
@@ -415,7 +409,7 @@ impl HttpClient {
 
     fn normalize_url(&self, window: &mut Window, cx: &mut Context<Self>) {
         let value = self.url.read(cx).value();
-        if let Some(url) = localhost_url(value.trim()) {
+        if let Some(url) = url_with_default_scheme(value.trim()) {
             self.url
                 .update(cx, |input, cx| input.set_value(url, window, cx));
         }
@@ -431,6 +425,11 @@ impl HttpClient {
             .map(|field| field.read(cx).value())
             .unwrap_or_default();
         let request = self.request_snapshot(cx);
+        self.sent_http_url = request
+            .url
+            .get(..7)
+            .filter(|scheme| scheme.eq_ignore_ascii_case("http://"))
+            .map(|_| request.url.clone());
         self.error = None;
         self.error_timeline.clear();
         self.pending = true;
@@ -446,6 +445,7 @@ impl HttpClient {
             .is_err()
         {
             self.pending = false;
+            self.sent_http_url = None;
             self.error = Some("Could not send request".into());
         }
         cx.notify();
@@ -506,6 +506,7 @@ impl HttpClient {
     ) {
         self.pending = false;
         self.response_loading = false;
+        self.sent_http_url = None;
         self.error = Some(error);
         self.error_timeline = timeline;
         self.timeline_scroll.set_offset(Point::default());
@@ -645,6 +646,15 @@ impl HttpClient {
     }
 
     fn finish_response(&mut self, response: Response, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(sent_url) = self.sent_http_url.take()
+            && response.https_upgrade_url.is_some()
+            && self.url.read(cx).value().trim() == sent_url
+            && let Some((_, remainder)) = sent_url.split_once("://")
+        {
+            self.url.update(cx, |input, cx| {
+                input.replace_all(format!("https://{remainder}"), window, cx)
+            });
+        }
         self.response_headers.update(cx, |headers, cx| {
             headers.set_headers(&response.headers, window, cx)
         });
@@ -1139,7 +1149,12 @@ impl HttpClient {
 
     fn response_content(&self, cx: &App) -> AnyElement {
         match self.response_tab {
-            0 => match self.response.as_ref().map(|response| &response.format) {
+            0 => match self
+                .response
+                .as_ref()
+                .filter(|response| !self.response_loading && response.bytes > 0)
+                .map(|response| &response.format)
+            {
                 Some(ResponseFormat::Json) => self
                     .response_body
                     .render(true, false, cx)

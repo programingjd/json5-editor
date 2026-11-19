@@ -6,20 +6,39 @@ const QUERY_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'_')
     .remove(b'~');
 
-pub(super) fn localhost_url(value: &str) -> Option<String> {
+pub(super) fn url_with_default_scheme(value: &str) -> Option<String> {
     let value = value.strip_prefix("//").unwrap_or(value);
     let authority = value.split(['/', '?', '#']).next()?;
-    let (host, port) = authority
-        .split_once(':')
-        .map_or((authority, None), |(host, port)| (host, Some(port)));
-    if host.eq_ignore_ascii_case("localhost")
-        && port
-            .is_none_or(|port| !port.is_empty() && port.bytes().all(|byte| byte.is_ascii_digit()))
-    {
-        Some(format!("http://{value}"))
+    let port = if let Some(ip) = authority.strip_prefix('[') {
+        let (ip, suffix) = ip.split_once(']')?;
+        ip.parse::<std::net::Ipv6Addr>().ok()?;
+        if suffix.is_empty() {
+            None
+        } else {
+            Some(suffix.strip_prefix(':')?)
+        }
     } else {
-        None
+        let (host, port) = authority
+            .split_once(':')
+            .map_or((authority, None), |(host, port)| (host, Some(port)));
+        let host = host.strip_suffix('.').unwrap_or(host);
+        if !host.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .chars()
+                    .all(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '_'))
+        }) {
+            return None;
+        }
+        port
+    };
+    if let Some(port) = port {
+        if port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        port.parse::<u16>().ok()?;
     }
+    Some(format!("http://{value}"))
 }
 
 pub(super) fn split_url(url: &str) -> (&str, Option<&str>, &str) {
@@ -101,27 +120,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn adds_http_only_to_localhost_without_a_scheme() {
+    fn adds_http_to_hosts_without_a_scheme() {
         assert_eq!(
-            localhost_url("localhost:8080/path?q=a#b").as_deref(),
+            url_with_default_scheme("localhost:8080/path?q=a#b").as_deref(),
             Some("http://localhost:8080/path?q=a#b")
         );
         assert_eq!(
-            localhost_url("LOCALHOST").as_deref(),
+            url_with_default_scheme("LOCALHOST").as_deref(),
             Some("http://LOCALHOST")
         );
         assert_eq!(
-            localhost_url("//localhost/test").as_deref(),
+            url_with_default_scheme("//localhost/test").as_deref(),
             Some("http://localhost/test")
         );
         for url in [
+            "example.com",
+            "internal:9200/path",
+            "127.0.0.1",
+            "[::1]:8080",
+        ] {
+            assert_eq!(url_with_default_scheme(url), Some(format!("http://{url}")));
+        }
+        for url in [
             "https://localhost:8080/",
             "http://localhost/",
-            "localhost.example/path",
-            "example.com",
             "localhost:abc",
+            "ftp://example.com/",
+            "/relative",
+            "host name",
+            "host:65536",
         ] {
-            assert_eq!(localhost_url(url), None);
+            assert_eq!(url_with_default_scheme(url), None);
         }
     }
 

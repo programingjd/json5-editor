@@ -13,7 +13,7 @@ import init, {
 } from './wasm/gpui_http_client_web.js';
 
 function downloadName({ headers, url }) {
-  const disposition = headers.find(([name]) => name === 'content-disposition')?.[1] ?? '';
+  const disposition = headers.find(([name]) => name.toLowerCase() === 'content-disposition')?.[1] ?? '';
   const encoded = /(?:^|;)\s*filename\*\s*=\s*UTF-8'[^']*'([^;]+)/i.exec(disposition)?.[1];
   const name = /(?:^|;)\s*filename\s*=\s*(?:"([^"]+)"|([^;]+))/i.exec(disposition);
   try { if (encoded) return decodeURIComponent(encoded.trim()); } catch { /* Try the plain name. */ }
@@ -73,9 +73,10 @@ function createTabDocuments(tab, transport) {
     bodyEditor(true, () => responseMetadata), undefined, reportResponseError);
   const openResponse = ({ body, ...metadata }) => {
     if (disposed) return;
-    if (metadata.format === 'binary' || metadata.format === 'text') {
-      const download = metadata.format === 'binary' ? { body, name: downloadName(metadata) } : undefined;
-      if (!install_non_json_response(tab, JSON.stringify(metadata), download ? '' : body)) {
+    const empty = metadata.bytes === 0;
+    if (empty || metadata.format === 'binary' || metadata.format === 'text') {
+      const download = !empty && metadata.format === 'binary' ? { body, name: downloadName(metadata) } : undefined;
+      if (!install_non_json_response(tab, JSON.stringify(metadata), empty || download ? '' : body)) {
         throw new Error('Could not install the response');
       }
       responseDownload = download;

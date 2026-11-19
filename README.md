@@ -80,7 +80,8 @@ Serve the generated `editor/dist/` directory with a static web server, or use
 ## HTTP client
 
 Build the web app from `editor/` with `npm run build:http-client`. Then run the
-Salvo server from `http_client/proxy/` with a local Rust toolchain:
+Pingora server from `http_client/proxy/` with a local Rust toolchain, CMake,
+and a C compiler:
 
 ```shell
 cargo run --locked

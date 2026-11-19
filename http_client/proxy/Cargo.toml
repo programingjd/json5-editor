@@ -8,13 +8,19 @@ publish = false
 license = "Apache-2.0"
 
 [dependencies]
+async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "zlib", "zstd"] }
+async-trait = "0.1"
+base64 = "0.22"
 bytes = "1"
 futures-util = "0.3"
-http-body = "1"
-http-body-util = "0.1"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream", "gzip", "brotli", "deflate", "zstd"] }
-salvo = { version = "1.2.1", default-features = false, features = ["server", "http1", "serve-static"] }
+http = "1"
+mime_guess = "2"
+percent-encoding = "2"
+pingora = { version = "0.9.1", features = ["rustls"] }
+pingora-http = "0.9.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["fs", "io-util", "net", "time"] }
+tokio-util = { version = "0.7", features = ["io"] }
+url = "2"
 

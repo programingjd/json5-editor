@@ -56,7 +56,7 @@ async function readResponse(response, request) {
     throw error;
   }
   if (response.headers.get('content-type') !== MEDIA_TYPE) {
-    throw new Error('Invalid proxy response. Open the HTTP client through the Salvo server.');
+    throw new Error('Invalid proxy response. Open the HTTP client through the local proxy server.');
   }
   const packet = await response.blob();
   if (packet.size < 12) throw new Error('Incomplete proxy response');
@@ -68,7 +68,7 @@ async function readResponse(response, request) {
   metadata.elapsed_ms = Math.round(elapsed);
   metadata.timeline = timelineEvents(metadata.timeline, request);
   metadata.timeline.push({ label: `${metadata.status} response received`, elapsed_ms: elapsed, side: 'response' });
-  const type = metadata.headers.find(([name]) => name === 'content-type')?.[1] ?? '';
+  const type = metadata.headers.find(([name]) => name.toLowerCase() === 'content-type')?.[1] ?? '';
   const mime = type.split(';', 1)[0].trim().toLowerCase();
   const body = packet.slice(4 + length, -8, mime);
   const format = mime.startsWith('text/') || /(?:\/|\+)xml$/.test(mime) || mime === 'application/javascript'
