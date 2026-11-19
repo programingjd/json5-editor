@@ -11,7 +11,8 @@ folding, diagnostics, search, and save UI.
 
 ## Build and load
 
-Build scripts are available:
+Install the shared build dependencies with `npm ci` in the repository's
+`editor/` directory. From this extension directory, run either build script:
 ```shell
 scripts/build.bat
 ```

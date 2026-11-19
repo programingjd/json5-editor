@@ -3,12 +3,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-const require = createRequire(new URL('../www/package.json', import.meta.url));
+const require = createRequire(new URL('../editor/package.json', import.meta.url));
 const { parse: parseToml } = require('smol-toml');
 
 export async function prepareSbom() {
   const root = fileURLToPath(new URL('../', import.meta.url));
-  const lock = JSON.parse(await readFile(path.join(root, 'www/package-lock.json'), 'utf8'));
+  const editorRoot = path.join(root, 'editor');
+  const lock = JSON.parse(await readFile(path.join(editorRoot, 'package-lock.json'), 'utf8'));
   const cargoLock = parseToml(await readFile(path.join(root, 'Cargo.lock'), 'utf8'));
   const entries = new Map();
   for (const [key, details] of Object.entries(lock.packages)) {
@@ -16,7 +17,7 @@ export async function prepareSbom() {
     const name = details.name ?? key.split('node_modules/').at(-1);
     const { version, integrity } = details;
     let installed;
-    try { installed = JSON.parse(await readFile(path.join(root, 'www', key, 'package.json'), 'utf8')); }
+    try { installed = JSON.parse(await readFile(path.join(editorRoot, key, 'package.json'), 'utf8')); }
     catch { /* Platform-specific optional packages can be absent on this host. */ }
     const reference = `npm:${key}@${version}`;
     const component = { type: 'library', 'bom-ref': reference, name, version,

@@ -47,4 +47,3 @@ pub const LOCALS_QUERY: &str = include_str!("../../queries/locals.scm");
 #[cfg(with_tags_query)]
 /// The symbol tagging query for this grammar.
 pub const TAGS_QUERY: &str = include_str!("../../queries/tags.scm");
-

@@ -84,4 +84,4 @@ fi
 git -C "$upstream" rev-parse HEAD > "$grammar_dir/UPSTREAM_REVISION"
 
 echo "Updated Tree-sitter runtime to $runtime_version and JSON5 grammar to $grammar_ref."
-echo 'Next, run npm run build:wasm from the www directory to verify WASM compatibility.'
+echo 'Next, run npm run build:wasm from the editor directory to verify WASM compatibility.'

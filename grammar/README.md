@@ -42,7 +42,7 @@ with `tree-sitter-language`, preserve the `tree_sitter_json5_orchard` parser
 symbol, and review the WASM header integration in `bindings/rust/build.rs` when
 upgrading the runtime.
 
-Then rebuild from `../www/`:
+Then rebuild from `../editor/`:
 
 ```shell
 npm run build

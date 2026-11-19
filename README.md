@@ -21,15 +21,15 @@ project. Most of the application is Rust compiled to **WebAssembly**, using
 Additional credits and the generated software bill of materials are available
 in the editor's **About** dialog.
 
-The Rust editor crate lives in `apps/editor/`. Its shared browser runtime lives
-in [`editor/`](editor/README.md). The standalone
-app in `www/` and the browser extensions in `extensions/editor/` each have a small
-entry point that imports it. Both use the same WASM, document worker, fonts and
-UI; the extension supplies its response stream through the startup API.
+The Rust editor crate lives in `apps/editor/`. [`editor/`](editor/README.md)
+contains the standalone web app, the shared browser runtime and the npm build
+toolchain. The browser extensions in `extensions/editor/` use the same WASM,
+document worker, fonts and UI and supply their response stream through the
+startup API.
 
 ## Build requirements
 
-- Node or compatible runtime.
+- Node.js 24+ and npm.
 - A running **container engine**: [Podman](https://podman.io/docs/installation)
   or [Docker](https://docs.docker.com/get-started/get-docker/).
 
@@ -55,7 +55,7 @@ explicitly, set `CONTAINER_ENGINE=podman` or `CONTAINER_ENGINE=docker` in your s
 From this directory:
 
 ```shell
-cd www
+cd editor
 npm ci
 npm run dev
 ```
@@ -67,7 +67,7 @@ This builds the WASM modules and starts the development server at
 npm run build
 ```
 
-Serve the generated `www/dist/` directory with a static web server, or use
+Serve the generated `editor/dist/` directory with a static web server, or use
 `npm run preview` locally.
 
 `npm run dev:debug` builds faster, unoptimized WASM.
@@ -77,12 +77,21 @@ Serve the generated `www/dist/` directory with a static web server, or use
 `npm run build:web` reuses the existing WASM files and needs no container.
 
 
-## HTTP client preview
+## HTTP client
 
-From `www/`, run `npm run build:http-client`, then
-`npm run preview:http-client`. The preview opens on port 3011 and uses a sample
-transport for the request and response panes. The web app lives in `http_client/`
-and builds to `http_client/dist/`. Its Rust crate is in `apps/http_client/`.
+Build the web app from `editor/` with `npm run build:http-client`. Then run the
+Salvo server from `http_client/proxy/` with a local Rust toolchain:
+
+```shell
+cargo run --locked
+```
+
+Open <http://127.0.0.1:8080>. The server serves `http_client/dist/` and forwards
+requests through `POST /proxy` using the client's timeout and redirect settings.
+To use a different port, run `cargo run --locked -- 9000`.
+
+To work with sample data, run `npm run preview:http-client` from `editor/` and
+open <http://localhost:3011/?preview>. The WASM crate lives in `apps/http_client/`.
 
 ## Browser extension
 
@@ -107,7 +116,7 @@ See the [extension README](extensions/editor/README.md) for loading instructions
   `sh scripts/generate-release-artifacts.sh` on macOS/Linux. Node.js 24+ is required;
   no additional dependencies are needed.
 - The script packages the contents of `extensions/editor/dist/`,
-  `extensions/editor/dist-firefox/`, and `www/dist/` with maximum ZIP compression as
+  `extensions/editor/dist-firefox/`, and `editor/dist/` with maximum ZIP compression as
   `chrome-extension-unpacked.zip`, `firefox-extension-unpacked.zip`, and
   `standalone.zip`, respectively, in the project root.
 - It also copies `assets/sbom.json` to the project root as `sbom.json`.

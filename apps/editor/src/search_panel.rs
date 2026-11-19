@@ -530,7 +530,8 @@ impl EditorSearchPanel {
             .child(
                 panel_button("previous-search-match", cx)
                     .icon(
-                        Icon::default().data(include_bytes!("../../../assets/icons/chevron-up.svg")),
+                        Icon::default()
+                            .data(include_bytes!("../../../assets/icons/chevron-up.svg")),
                     )
                     .disabled(self.total_matches == 0)
                     .accessibility_label("Previous match")

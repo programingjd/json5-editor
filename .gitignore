@@ -1,6 +1,6 @@
 /editor/src/wasm/
 /editor/src/worker-wasm/
-/www/dist/
+/editor/dist/
 /http_client/dist/
 /http_client/src/wasm/
 /.tools/
@@ -25,7 +25,7 @@ Desktop.ini
 *.log
 *.dmp
 
-# Dependencies installed outside the shared www toolchain
+# Local dependencies and caches
 node_modules/
 __pycache__/
 

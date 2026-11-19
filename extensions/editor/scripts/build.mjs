@@ -9,20 +9,20 @@ import { renderExtensionIcons } from './icons.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = path.resolve(root, '../..');
-const standalone = path.join(workspace, 'www');
+const editorRoot = path.join(workspace, 'editor');
 if (process.argv.slice(2).some(argument => argument !== '--rebuild')) throw new Error('Usage: node scripts/build.mjs [--rebuild]');
 if (process.argv.includes('--rebuild')) {
   const npmCli = process.env.npm_execpath;
   const command = npmCli ? process.execPath : process.platform === 'win32' ? process.env.ComSpec ?? 'cmd.exe' : 'npm';
   const args = npmCli ? [npmCli, 'run', 'build']
     : process.platform === 'win32' ? ['/d', '/s', '/c', 'npm run build'] : ['run', 'build'];
-  const result = spawnSync(command, args, { cwd: standalone, stdio: 'inherit' });
+  const result = spawnSync(command, args, { cwd: editorRoot, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 // Build the extension entry point against the shared editor module.
 // No standalone HTML or generated JavaScript is modified during packaging.
-const require = createRequire(path.join(standalone, 'package.json'));
+const require = createRequire(path.join(editorRoot, 'package.json'));
 const { parse: parseToml } = require('smol-toml');
 const editorManifest = 'apps/editor/Cargo.toml';
 const cargo = parseToml(await readFile(path.join(workspace, editorManifest), 'utf8'));

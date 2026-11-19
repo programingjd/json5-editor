@@ -534,8 +534,11 @@ impl RenderOnce for Input {
                     .highlight_theme
                     .style
                     .editor_active_line_number,
-                editor_gutter_background: editor_surface
-                    .or(cx.theme().highlight_theme.style.editor_gutter_background),
+                editor_gutter_background: editor_surface.or(cx
+                    .theme()
+                    .highlight_theme
+                    .style
+                    .editor_gutter_background),
                 fold_icon_renderer: Some({
                     let color = cx
                         .theme()

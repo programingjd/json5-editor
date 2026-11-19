@@ -3,22 +3,38 @@ import { readColorScheme, observeColorScheme } from '../../editor/src/color-sche
 import { preserveHistoryMouseButtons } from '../../editor/src/browser-shortcuts.js';
 import { DocumentClient } from '../../editor/src/document-client.js';
 import '../../editor/src/editor-shell.css';
-import { createPreviewTransport } from './transport.js';
+import { createPreviewTransport, prepareRequestBody } from './transport.js';
 import { preview } from './preview.js';
+import { createProxyTransport } from '../proxy/client.js';
 import init, {
   advance_body_preparation, apply_syntax, begin_response, body_preparation_progress,
-  cancel_body_preparation, finish_request_error, install_body, prepare_body,
-  run, set_color_scheme, set_request_loading,
+  cancel_body_preparation, finish_archive, finish_request_error, install_body, install_non_json_response, prepare_body,
+  run, selected_response_header_text, set_binary_name, set_color_scheme, set_request_loading,
 } from './wasm/gpui_http_client_web.js';
 
+function downloadName({ headers, url }) {
+  const disposition = headers.find(([name]) => name === 'content-disposition')?.[1] ?? '';
+  const encoded = /(?:^|;)\s*filename\*\s*=\s*UTF-8'[^']*'([^;]+)/i.exec(disposition)?.[1];
+  const name = /(?:^|;)\s*filename\s*=\s*(?:"([^"]+)"|([^;]+))/i.exec(disposition);
+  try { if (encoded) return decodeURIComponent(encoded.trim()); } catch { /* Try the plain name. */ }
+  if (name) return (name[1] ?? name[2]).trim();
+  const path = new URL(url).pathname.split('/').pop();
+  try { return decodeURIComponent(path) || 'response.bin'; } catch { return path || 'response.bin'; }
+}
+
 function createTabDocuments(tab, transport) {
+  let disposed = false;
+  let responseDownload;
   const bodyEditor = (response, metadata) => ({
     prepare_json5_file: (id, view) => prepare_body(tab, response, id, view),
     advance_json5_file_preparation: id => advance_body_preparation(tab, response, id),
     json5_file_preparation_progress: id => body_preparation_progress(tab, response, id),
     cancel_json5_file_preparation: id => cancel_body_preparation(tab, response, id),
-    open_prepared_json5_file: (_name, _view, highlights, folds, brackets, diagnostics) =>
-      install_body(tab, response, metadata(), highlights, folds, brackets, diagnostics),
+    open_prepared_json5_file: (_name, _view, highlights, folds, brackets, diagnostics) => {
+      const installed = install_body(tab, response, metadata(), highlights, folds, brackets, diagnostics);
+      if (installed && response) responseDownload = undefined;
+      return installed;
+    },
     apply_syntax_result: (revision, highlights, folds, brackets, diagnostics) =>
       apply_syntax(tab, revision, highlights, folds, brackets, diagnostics),
   });
@@ -49,12 +65,22 @@ function createTabDocuments(tab, transport) {
   const queueEdit = payload => requestDocuments.edit(JSON.parse(payload));
   let responseMetadata;
   const reportResponseError = error => {
+    if (disposed) return;
     responseMetadata = undefined;
-    finish_request_error(tab, error?.message ?? String(error));
+    finish_request_error(tab, error?.message ?? String(error), JSON.stringify(error?.timeline ?? []));
   };
   const responseDocuments = new DocumentClient(
     bodyEditor(true, () => responseMetadata), undefined, reportResponseError);
   const openResponse = ({ body, ...metadata }) => {
+    if (disposed) return;
+    if (metadata.format === 'binary' || metadata.format === 'text') {
+      const download = metadata.format === 'binary' ? { body, name: downloadName(metadata) } : undefined;
+      if (!install_non_json_response(tab, JSON.stringify(metadata), download ? '' : body)) {
+        throw new Error('Could not install the response');
+      }
+      responseDownload = download;
+      return;
+    }
     begin_response(tab);
     responseMetadata = JSON.stringify(metadata);
     try {
@@ -64,45 +90,139 @@ function createTabDocuments(tab, transport) {
       throw error;
     }
   };
-  const send = payload => {
+  const downloadResponse = () => {
+    if (!responseDownload) return;
+    const url = URL.createObjectURL(responseDownload.body);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = responseDownload.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  let binaryFile;
+  const setBinaryFile = file => {
+    binaryFile = file;
+    set_binary_name(tab, file.name);
+  };
+  const send = (payload, text) => {
     // Return to GPUI after its click handler releases the view.
-    void Promise.resolve().then(() => new Promise((resolve, reject) => {
-      pendingBody = { resolve, reject };
-      requestDocuments.save('HTTP request', 'keep');
-    }))
-      .then(body => transport.send({ ...JSON.parse(payload), body }))
-      .then(openResponse)
+    void Promise.resolve().then(async () => {
+      if (disposed) return;
+      const request = JSON.parse(payload);
+      const body = request.body_format === 'json' ? await new Promise((resolve, reject) => {
+        pendingBody = { resolve, reject };
+        requestDocuments.save('HTTP request', 'keep');
+      }) : prepareRequestBody(request.body_format, text, binaryFile);
+      if (disposed) return;
+      return transport.send({ ...request, body });
+    })
+      .then(response => { if (response && !disposed) openResponse(response); })
       .catch(reportResponseError);
   };
+  const archive = async (payload, text) => {
+    const request = JSON.parse(payload);
+    let body = text;
+    if (request.body_format === 'json') {
+      body = await new Promise((resolve, reject) => {
+        pendingBody = { resolve, reject };
+        requestDocuments.save('HTTP request', 'keep');
+      });
+    } else if (request.body_format === 'binary' && binaryFile) {
+      body = {
+        name: binaryFile.name,
+        type: binaryFile.type,
+        last_modified: binaryFile.lastModified,
+        data: await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(binaryFile);
+        }),
+      };
+    }
+    const key = 'json5-http-client.archived-requests';
+    const archived = JSON.parse(localStorage.getItem(key) ?? '[]');
+    if (!Array.isArray(archived)) throw new Error('Invalid archived requests storage');
+    archived.push({ id: crypto.randomUUID(), archived_at: new Date().toISOString(), request: { ...request, body } });
+    localStorage.setItem(key, JSON.stringify(archived));
+  };
   const dispose = () => {
+    disposed = true;
+    pendingBody?.reject(new Error('Request tab closed'));
+    pendingBody = undefined;
     for (const documents of [requestDocuments, responseDocuments]) {
       documents.abortOpen();
       documents.worker?.terminate();
     }
   };
-  return { loadRequest, queueEdit, openResponse, reportResponseError, send, dispose };
+  return { loadRequest, queueEdit, openResponse, reportResponseError, send, archive, setBinaryFile, downloadResponse, dispose };
 }
 
-async function start(transport) {
+async function start(transport, initial) {
   const stopHistory = preserveHistoryMouseButtons();
   const [{ inter, mono, interItalic }] = await Promise.all([loadFonts(), init()]);
   const tabs = new Map();
+  const closedTabs = new Set();
   const documentsFor = tab => {
     if (!tabs.has(tab)) tabs.set(tab, createTabDocuments(tab, transport));
     return tabs.get(tab);
   };
-  const loadRequest = (tab, body) => queueMicrotask(() => documentsFor(tab).loadRequest(body));
+  const loadRequest = (tab, body) => queueMicrotask(() => {
+    if (!closedTabs.has(tab)) documentsFor(tab).loadRequest(body);
+  });
   const queueEdit = (tab, payload) => documentsFor(tab).queueEdit(payload);
-  const send = (tab, payload) => documentsFor(tab).send(payload);
-  const { body, ...initialMetadata } = preview.response;
+  const send = (tab, payload, text) => documentsFor(tab).send(payload, text);
+  const downloadResponse = tab => documentsFor(tab).downloadResponse();
+  const closeTab = tab => {
+    closedTabs.add(tab);
+    queueMicrotask(() => {
+      tabs.get(tab)?.dispose();
+      tabs.delete(tab);
+    });
+  };
+  const archiveTab = (tab, payload, text) => {
+    void Promise.resolve().then(() => documentsFor(tab).archive(payload, text)).then(
+      () => finish_archive(tab, ''),
+      error => finish_archive(tab, error?.message ?? String(error)),
+    );
+  };
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.hidden = true;
+  document.body.append(fileInput);
+  let fileTab;
+  const pickBinary = tab => {
+    fileTab = tab;
+    fileInput.click();
+  };
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (file && !closedTabs.has(fileTab)) documentsFor(fileTab).setBinaryFile(file);
+  });
+  const { response, ...initialRequest } = initial;
+  const initialMetadata = response
+    ? JSON.stringify({ ...initialRequest, response: { ...response, body: undefined } })
+    : JSON.stringify(initialRequest);
   const ready = () => queueMicrotask(() => {
     const documents = documentsFor(0);
-    documents.loadRequest(preview.request);
-    try { documents.openResponse(preview.response); }
-    catch (error) { documents.reportResponseError(error); }
+    documents.loadRequest(initial.request);
+    if (response) {
+      try { documents.openResponse(response); }
+      catch (error) { documents.reportResponseError(error); }
+    }
   });
-  run(readColorScheme().dark, inter, mono, interItalic, send, queueEdit, loadRequest, ready,
-    JSON.stringify({ ...preview, response: initialMetadata }));
+  run(readColorScheme().dark, inter, mono, interItalic, send, queueEdit, loadRequest, pickBinary, downloadResponse, closeTab, archiveTab, ready,
+    initialMetadata);
+  // Browser menu commands can send a copy event without a keydown.
+  const copyHeaders = event => {
+    if (!event.clipboardData) return;
+    const text = selected_response_header_text();
+    if (!text) return;
+    event.clipboardData.setData('text/plain', text);
+    event.preventDefault();
+  };
+  document.addEventListener('copy', copyHeaders);
   let dark = readColorScheme().dark;
   const stopTheme = observeColorScheme(state => {
     if (dark === state.dark) return;
@@ -114,10 +234,14 @@ async function start(transport) {
     for (const documents of tabs.values()) documents.dispose();
     stopTheme();
     stopHistory();
+    document.removeEventListener('copy', copyHeaders);
   });
 }
 
-void start(createPreviewTransport(preview.response)).catch(error => {
+const demo = new URLSearchParams(location.search).has('preview');
+const initial = demo ? preview : { url: '', request: '{}', headers: '' };
+const transport = demo ? createPreviewTransport(preview.response) : createProxyTransport();
+void start(transport, initial).catch(error => {
   console.error('HTTP client:', error);
   const output = document.createElement('div');
   output.id = 'error';

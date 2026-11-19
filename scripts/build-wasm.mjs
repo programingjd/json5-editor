@@ -18,7 +18,7 @@ const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const containerfile = fileURLToPath(new URL('./Containerfile', import.meta.url));
 const image = 'localhost/gpui-json5-editor-builder:nightly';
 const volumes = ['gpui-json5-editor-cargo-target', 'gpui-json5-editor-cargo-registry', 'gpui-json5-editor-rustup'];
-const require = createRequire(new URL('../www/package.json', import.meta.url));
+const require = createRequire(new URL('../editor/package.json', import.meta.url));
 const { parse: parseToml } = require('smol-toml');
 
 function available(command, args) {

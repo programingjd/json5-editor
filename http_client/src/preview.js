@@ -33,11 +33,18 @@ export const preview = {
   }, null, 2),
   headers: 'Content-Type: application/json\nAccept: application/json',
   response: {
+    preview: true,
     status: 200,
     status_text: 'OK',
     elapsed_ms: 81,
     bytes: new TextEncoder().encode(body).byteLength,
     headers: [['content-type', 'application/json; charset=utf-8'], ['cache-control', 'no-cache']],
+    timeline: [
+      { label: 'sending POST request to https://api.example.com/catalog/_search', elapsed_ms: 0, side: 'request' },
+      { label: 'request sent', elapsed_ms: 2, side: 'request' },
+      { label: 'receiving response', elapsed_ms: 79, side: 'response' },
+      { label: '200 response received', elapsed_ms: 81, side: 'response' },
+    ],
     body,
   },
 };

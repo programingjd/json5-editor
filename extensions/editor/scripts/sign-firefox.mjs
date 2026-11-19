@@ -22,7 +22,7 @@ try {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Run this script in an interactive terminal to enter signing credentials.');
   }
-  const require = createRequire(path.join(workspace, 'www/package.json'));
+  const require = createRequire(path.join(workspace, 'editor/package.json'));
   const { input, password } = await import(pathToFileURL(require.resolve('@inquirer/prompts')).href);
   const build = spawnSync(process.execPath, [path.join(root, 'scripts/build.mjs')], {
     cwd: root, stdio: 'inherit',

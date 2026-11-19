@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const require = createRequire(new URL('../../../www/package.json', import.meta.url));
+const require = createRequire(new URL('../../../editor/package.json', import.meta.url));
 const { Resvg } = require('@resvg/resvg-js');
 
 export async function renderExtensionIcons(output) {

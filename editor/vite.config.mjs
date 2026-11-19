@@ -10,7 +10,11 @@ import { browserInputFocus } from './build/browser-input-focus.js';
 const editorRoot = fileURLToPath(new URL('.', import.meta.url));
 const projectRoot = path.resolve(editorRoot, '..');
 // Both entry points use the existing, locked npm build toolchain.
-const require = createRequire(new URL('../www/package.json', import.meta.url));
+const require = createRequire(import.meta.url);
+
+export default function editorConfig() {
+  return createEditorConfig(new URL('.', import.meta.url));
+}
 
 export async function createEditorConfig(rootUrl, {
   outDir = 'dist', wasmModule = 'gpui_json5_editor_web',

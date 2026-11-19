@@ -600,7 +600,10 @@ impl<M: InputModeKind> InputBaseState<M> {
 
     fn handle_clipboard_paste(&self, text: &str) -> bool {
         self.is_editable()
-            && self.clipboard_paste_handler.as_ref().is_some_and(|handler| handler(self, text))
+            && self
+                .clipboard_paste_handler
+                .as_ref()
+                .is_some_and(|handler| handler(self, text))
     }
 
     pub fn has_selection_focus(&self, window: &Window, cx: &App) -> bool {

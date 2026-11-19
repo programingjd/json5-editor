@@ -83,7 +83,9 @@ pub fn json5_file_preparation_progress(id: u32) -> Vec<u32> {
         let total = document
             .preparation
             .as_ref()
-            .map_or(document.content.len(), |preparation| preparation.text().len());
+            .map_or(document.content.len(), |preparation| {
+                preparation.text().len()
+            });
         let processed = document
             .preparation
             .as_ref()

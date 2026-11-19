@@ -7,9 +7,14 @@ use gpui_kit::{App, AppContext as _, ApplicationHandle, Entity, Global, Hsla, Wi
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
 
+mod buttons;
 mod client;
+mod header_picker;
 #[path = "../../editor/src/palette.rs"]
 mod palette;
+mod query;
+mod request_fields;
+mod response_headers;
 #[path = "../../editor/src/syntax_data.rs"]
 mod syntax_data;
 #[path = "../../editor/src/tree_sitter_highlighter.rs"]
@@ -35,6 +40,10 @@ pub fn run(
     send: Function,
     queue_edit: Function,
     load_request: Function,
+    pick_binary: Function,
+    download_response: Function,
+    close_tab: Function,
+    archive_tab: Function,
     ready: Function,
     preview: String,
 ) -> Result<(), JsValue> {
@@ -49,6 +58,8 @@ pub fn run(
     gpui_kit::web::init_logging();
     let app = web_support::web_application().run_embedded(move |cx| {
         gpui_kit::init(cx);
+        client::bind_keys(cx);
+        response_headers::bind_keys(cx);
         cx.text_system()
             .add_fonts(fonts)
             .expect("Register HTTP client fonts");
@@ -58,6 +69,10 @@ pub fn run(
                 send,
                 queue_edit,
                 load_request,
+                pick_binary,
+                download_response,
+                close_tab,
+                archive_tab,
             };
             cx.new(|cx| Workspace::new(window, cx, callbacks, preview))
         })
@@ -75,6 +90,16 @@ const WORKSPACE_TAB_COLORS: [u32; 10] = [
     0xb497e7,
 ];
 const WORKSPACE_TAB_FOREGROUND: u32 = 0x2b2b2b;
+const DETAIL_PANE_MAX_WIDTH_REMS: f32 = 39.0;
+const TIMELINE_REQUEST_FOREGROUND: u32 = 0xfd86ff;
+const TIMELINE_RESPONSE_FOREGROUND: u32 = 0x9d65ff;
+
+fn timeline_foregrounds() -> (Hsla, Hsla) {
+    (
+        rgb(TIMELINE_REQUEST_FOREGROUND).into(),
+        rgb(TIMELINE_RESPONSE_FOREGROUND).into(),
+    )
+}
 
 fn workspace_tab_background(index: usize) -> Hsla {
     rgb(WORKSPACE_TAB_COLORS[index % WORKSPACE_TAB_COLORS.len()]).into()
@@ -134,18 +159,79 @@ pub fn set_color_scheme(dark: bool) {
 }
 
 #[wasm_bindgen]
+pub fn finish_archive(tab_id: u32, error: String) {
+    update_app(|cx| {
+        let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) else {
+            return;
+        };
+        let Some(window) = cx.windows().into_iter().next() else {
+            return;
+        };
+        let _ = cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.finish_archive(tab_id, error, window, cx)
+            });
+        });
+    });
+}
+
+#[wasm_bindgen]
+pub fn selected_response_header_text() -> String {
+    let mut text = String::new();
+    update_app(|cx| {
+        let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) else {
+            return;
+        };
+        let Some(window) = cx.windows().into_iter().next() else {
+            return;
+        };
+        let _ = cx.update_window(window, |_, window, cx| {
+            text = view.update(cx, |view, cx| {
+                view.selected_response_header_text(window, cx)
+            });
+        });
+    });
+    text
+}
+
+#[wasm_bindgen]
 pub fn begin_response(tab_id: u32) {
     update_view(tab_id, HttpClient::begin_response);
 }
 
 #[wasm_bindgen]
-pub fn finish_request_error(tab_id: u32, error: String) {
-    update_view(tab_id, |view, cx| view.finish_request_error(error, cx));
+pub fn finish_request_error(tab_id: u32, error: String, timeline: String) {
+    let timeline = serde_json::from_str(&timeline).unwrap_or_default();
+    update_view(tab_id, |view, cx| {
+        view.finish_request_error(error, timeline, cx)
+    });
+}
+
+#[wasm_bindgen]
+pub fn install_non_json_response(tab_id: u32, metadata: String, body: String) -> bool {
+    let mut installed = false;
+    update_app(|cx| {
+        let (Some(view), Some(window)) = (client_tab(tab_id, cx), cx.windows().into_iter().next())
+        else {
+            return;
+        };
+        let _ = cx.update_window(window, |_, window, cx| {
+            installed = view.update(cx, |view, cx| {
+                view.install_non_json_response(&metadata, body, window, cx)
+            });
+        });
+    });
+    installed
 }
 
 #[wasm_bindgen]
 pub fn set_request_loading(tab_id: u32, loading: bool) {
     update_view(tab_id, |view, cx| view.set_request_loading(loading, cx));
+}
+
+#[wasm_bindgen]
+pub fn set_binary_name(tab_id: u32, name: String) {
+    update_view(tab_id, |view, cx| view.set_binary_name(name, cx));
 }
 
 #[wasm_bindgen]

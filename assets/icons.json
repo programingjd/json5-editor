@@ -17,6 +17,24 @@
   },
   "icons": [
     {
+      "file": "icons/delete.svg",
+      "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/delete.svg",
+      "sha256": "90ce02aac2a0ccf60e7d9470e192d72e7b1bbe046a17a5f4f5941c73c04e594d",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/drag.svg",
+      "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/drag.svg",
+      "sha256": "d1314a5a2255b597093ecb110b8ae0e929b408e37e06ea77f10075a46fa8a4bc",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/create-column.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/JpaIcons/icons/newui/createColumn.svg",
+      "sha256": "c8b0f2e1cec42c13811c506ac1418c25417c5a44227209e7493597e4e0d2402f",
+      "provider": "jetbrains"
+    },
+    {
       "file": "icons/open-new-tab.svg",
       "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/openNewTab.svg",
       "sha256": "357c634db5b9fcb52c09a02d2491239086fcb92ee8d222e35872a0ea37beae7d",
@@ -316,6 +334,12 @@
       "source": "https://zed.dev/brand",
       "usage_terms": "https://zed.dev/brand#trademark",
       "sha256": "d2b75c63e8f18cfb24b4d8efa2f4531b5b3f5622ab0c1a6791b7a45b4cd5b021"
+    },
+    {
+      "file": "icons/move-to-another-changelog.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/JpaIcons/icons/newui/moveToAnotherChangelog.svg",
+      "sha256": "05350b731663086a7c3153d788f1069e3d1bc54924f40b4691cd1c00c325acf1",
+      "provider": "jetbrains"
     }
   ]
 }

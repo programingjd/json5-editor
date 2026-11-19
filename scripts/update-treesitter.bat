@@ -78,7 +78,7 @@ if errorlevel 1 goto :failure
 
 rmdir /s /q "%TEMP_ROOT%"
 echo Updated Tree-sitter runtime to %RUNTIME_VERSION% and JSON5 grammar to %GRAMMAR_REF%.
-echo Next, run npm run build:wasm from the www directory to verify WASM compatibility.
+echo Next, run npm run build:wasm from the editor directory to verify WASM compatibility.
 exit /b 0
 
 :usage

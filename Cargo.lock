@@ -2218,6 +2218,7 @@ dependencies = [
  "gpui-kit",
  "js-sys",
  "log",
+ "percent-encoding",
  "ropey",
  "serde",
  "serde_json",

@@ -93,7 +93,12 @@ struct Json5EditorApp {
 }
 
 impl Json5EditorApp {
-    fn new(window: &mut Window, sbom_url: SharedString, notice_url: SharedString, cx: &mut App) -> Entity<Self> {
+    fn new(
+        window: &mut Window,
+        sbom_url: SharedString,
+        notice_url: SharedString,
+        cx: &mut App,
+    ) -> Entity<Self> {
         let filename = cx.new(|_| SharedString::from("example.json5"));
         let syntax = Rc::new(RefCell::new(
             tree_sitter_highlighter::ParseSnapshot::default(),
@@ -260,7 +265,8 @@ impl Json5EditorApp {
     }
 
     fn save(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.filename.update(cx, |filename, cx| filename.commit(window, cx));
+        self.filename
+            .update(cx, |filename, cx| filename.commit(window, cx));
         self.info_dialogs.update(cx, |info, cx| {
             info.dismiss(window, cx);
         });
@@ -492,11 +498,9 @@ impl Render for Json5EditorApp {
                                     .with_size(Size::Small)
                                     .custom(button_style.clone())
                                     .rounded(ButtonRounded::Size(px(4.)))
-                                    .icon(
-                                        Icon::default().data(include_bytes!(
-                                            "../../../assets/icons/expand-all.svg"
-                                        )),
-                                    )
+                                    .icon(Icon::default().data(include_bytes!(
+                                        "../../../assets/icons/expand-all.svg"
+                                    )))
                                     .accessibility_label("Expand all scopes")
                                     .tooltip_with(|window, cx| {
                                         shortcuts::tooltip(
@@ -541,8 +545,9 @@ impl Render for Json5EditorApp {
                                     .custom(button_style.clone())
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
-                                        Icon::default()
-                                            .data(include_bytes!("../../../assets/icons/expand.svg")),
+                                        Icon::default().data(include_bytes!(
+                                            "../../../assets/icons/expand.svg"
+                                        )),
                                     )
                                     .accessibility_label("Expand current scope")
                                     .tooltip_with(|window, cx| {
@@ -564,8 +569,9 @@ impl Render for Json5EditorApp {
                                     .custom(button_style.clone())
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
-                                        Icon::default()
-                                            .data(include_bytes!("../../../assets/icons/search.svg")),
+                                        Icon::default().data(include_bytes!(
+                                            "../../../assets/icons/search.svg"
+                                        )),
                                     )
                                     .accessibility_label("Search")
                                     .tooltip_with(|window, cx| {
@@ -648,8 +654,9 @@ impl Render for Json5EditorApp {
                                     .custom(button_style.clone())
                                     .rounded(ButtonRounded::Size(px(4.)))
                                     .icon(
-                                        Icon::default()
-                                            .data(include_bytes!("../../../assets/icons/revert.svg")),
+                                        Icon::default().data(include_bytes!(
+                                            "../../../assets/icons/revert.svg"
+                                        )),
                                     )
                                     .accessibility_label("Revert file")
                                     .tooltip("Revert to originally opened content")
@@ -699,8 +706,10 @@ impl Render for Json5EditorApp {
                                     .child(
                                         Icon::default()
                                             .data(if dark {
-                                                include_bytes!("../../../assets/icons/dark-theme.svg")
-                                                    .as_slice()
+                                                include_bytes!(
+                                                    "../../../assets/icons/dark-theme.svg"
+                                                )
+                                                .as_slice()
                                             } else {
                                                 include_bytes!(
                                                     "../../../assets/icons/light-theme.svg"
@@ -898,7 +907,12 @@ pub fn run(
         cx.set_global(ColorScheme { dark, overridden });
         set_theme(dark, cx);
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            Json5EditorApp::new(window, sbom_url.clone().into(), notice_url.clone().into(), cx)
+            Json5EditorApp::new(
+                window,
+                sbom_url.clone().into(),
+                notice_url.clone().into(),
+                cx,
+            )
         })
         .expect("Failed to open JSON5 editor window");
         cx.activate(true);
@@ -916,12 +930,20 @@ pub fn run(
 pub fn open_search() {
     APPLICATION.with(|application| {
         let application = application.borrow();
-        let Some(handle) = application.as_ref() else { return };
+        let Some(handle) = application.as_ref() else {
+            return;
+        };
         handle.update(|cx| {
-            let Some(window) = cx.windows().into_iter().next() else { return };
+            let Some(window) = cx.windows().into_iter().next() else {
+                return;
+            };
             let _ = cx.update_window(window, |_, window, cx| {
-                let Some(editor) = cx.try_global::<Json5EditorGlobal>()
-                    .map(|global| global.editor.clone()) else { return };
+                let Some(editor) = cx
+                    .try_global::<Json5EditorGlobal>()
+                    .map(|global| global.editor.clone())
+                else {
+                    return;
+                };
                 let focus = editor.read(cx).focus_handle(cx);
                 // Route through the application's existing handler, including
                 // its modal-dialog guard, without first moving the caret.
@@ -1142,13 +1164,23 @@ pub fn apply_syntax_result(
     });
 }
 
-fn queue_editor_syntax_edit(revision: u32, edit: gpui_kit::component::input::InputEdit, text: &ropey::Rope) {
+fn queue_editor_syntax_edit(
+    revision: u32,
+    edit: gpui_kit::component::input::InputEdit,
+    text: &ropey::Rope,
+) {
     let replacement = text.slice(edit.start_byte..edit.new_end_byte).to_string();
     queue_syntax_edit(
-        revision, edit.start_byte, edit.old_end_byte, &replacement,
-        edit.start_position.row, edit.start_position.column,
-        edit.old_end_position.row, edit.old_end_position.column,
-        edit.new_end_position.row, edit.new_end_position.column,
+        revision,
+        edit.start_byte,
+        edit.old_end_byte,
+        &replacement,
+        edit.start_position.row,
+        edit.start_position.column,
+        edit.old_end_position.row,
+        edit.old_end_position.column,
+        edit.new_end_position.row,
+        edit.new_end_position.column,
     );
 }
 

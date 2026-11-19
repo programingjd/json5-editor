@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const archives = [
   ['extensions/editor/dist', 'chrome-extension-unpacked.zip'],
   ['extensions/editor/dist-firefox', 'firefox-extension-unpacked.zip'],
-  ['www/dist', 'standalone.zip'],
+  ['editor/dist', 'standalone.zip'],
 ];
 
 async function collectFiles(directory, prefix = '', files = new Map()) {

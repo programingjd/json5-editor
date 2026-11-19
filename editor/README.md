@@ -1,9 +1,9 @@
-# Shared browser editor
+# Browser editor
 
-This module contains the browser runtime used by both the web app and the
+This directory contains the standalone web app and the browser runtime used by the
 browser extensions: GPUI startup, document processing, the parser worker,
 font loading, file operations and loading/error surfaces. Rust remains in
-the parent project's `src/` and `worker/` crates; their generated WASM bindings
+the project's `apps/editor/` and `worker/` crates. Their generated WASM bindings
 are written to `editor/src/wasm/` and `editor/src/worker-wasm/`.
 
 The public startup API is `startEditor({ initialDocument })` in `src/editor.js`.
@@ -12,14 +12,14 @@ or `null` to use the editor's example. Response streams supply `name`, `read()`
 and `cancel()`; `takePort()` transfers the data channel to the parser worker,
 and `close()` releases the control channel. Loading starts after GPUI is ready.
 
-`www/src/main.js` starts the standalone app. `extensions/editor/src/main.js` passes
+`src/main.js` starts the standalone app. `extensions/editor/src/main.js` passes
 the extension's response-host adapter to the same API. Both use `index.html`
 from this module, with their own launcher selected by the build configuration;
 neither depends on the other launcher or its generated output.
 
 `vite.config.mjs` provides their shared build configuration, including the
 compatibility adapters for pinned GPUI-generated bindings in `build/`. Build
-dependencies are installed once from `www/package-lock.json`. The shared module
+dependencies are installed here with `npm ci` using `package-lock.json`. The app
 has no npm runtime dependencies.
 
 `src/browser-shortcuts.js` intercepts Ctrl/Cmd+F during the page's keydown capture
