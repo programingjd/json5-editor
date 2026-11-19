@@ -10,7 +10,7 @@ license = "Apache-2.0"
 [dependencies]
 async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "zlib", "zstd"] }
 async-trait = "0.1"
-base64 = "0.22"
+base64 = "0.23"
 bytes = "1"
 futures-util = "0.3"
 http = "1"

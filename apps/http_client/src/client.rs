@@ -1,8 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Duration,
+};
 
 use gpui_kit::base::{
-    StyledExt as _,
+    MotionStatus, StyledExt as _, Transition,
     input::{Enter, InputEvent, InputPreparation},
+    transition_with_status,
 };
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, Size,
@@ -13,11 +18,12 @@ use gpui_kit::component::{
     toolbar::Toolbar,
 };
 use gpui_kit::{
-    Anchor, AnyElement, App, AppContext as _, Context, CursorStyle, Div, DragMoveEvent, ElementId,
-    EmptyView, Entity, Focusable as _, InteractiveElement as _, IntoElement, KeyBinding,
-    KeyDownEvent, ParentElement as _, Point, Render, ScrollHandle, SharedString,
+    Anchor, AnyElement, App, AppContext as _, Context, CursorStyle, DispatchPhase, Div,
+    DragMoveEvent, ElementId, EmptyView, Entity, Focusable as _, InteractiveElement as _,
+    IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
+    ParentElement as _, Pixels, Point, Render, ScrollHandle, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, TextStyleRefinement, Window,
-    accesskit::Role, div, prelude::FluentBuilder as _, px, relative, rems,
+    accesskit::Role, canvas, deferred, div, prelude::FluentBuilder as _, px, relative, rems,
 };
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
@@ -1410,14 +1416,30 @@ struct WorkspaceTab {
     id: u32,
     client: Entity<HttpClient>,
     archiving: bool,
+    displayed_left: Cell<Pixels>,
     _url_subscription: Subscription,
 }
+
+struct WorkspaceTabDrag {
+    id: u32,
+    start: Point<Pixels>,
+    moved: bool,
+    start_left: Pixels,
+    start_scroll: Pixels,
+    left: Pixels,
+}
+
+const WORKSPACE_TAB_WIDTH: f32 = 10.0;
+const WORKSPACE_TAB_GAP: f32 = 0.25;
+const WORKSPACE_TAB_SLIDE: Duration = Duration::from_millis(150);
 
 pub(super) struct Workspace {
     tabs: Vec<WorkspaceTab>,
     next_tab_id: u32,
     active_tab: u32,
     tab_scroll: ScrollHandle,
+    tab_drag: Option<WorkspaceTabDrag>,
+    raised_tab: Option<u32>,
     callbacks: ClientCallbacks,
 }
 
@@ -1435,10 +1457,13 @@ impl Workspace {
                 _url_subscription: Self::subscribe_to_url(&first_tab, cx),
                 client: first_tab,
                 archiving: false,
+                displayed_left: Cell::new(px(0.)),
             }],
             next_tab_id: 1,
             active_tab: 0,
             tab_scroll: ScrollHandle::new(),
+            tab_drag: None,
+            raised_tab: None,
             callbacks,
         }
     }
@@ -1483,6 +1508,105 @@ impl Workspace {
         cx.notify();
     }
 
+    fn reorder_tab(&mut self, source: u32, target: u32, cx: &mut Context<Self>) {
+        let source = self.tabs.iter().position(|tab| tab.id == source);
+        let target = self.tabs.iter().position(|tab| tab.id == target);
+        if let (Some(source), Some(target)) = (source, target)
+            && source != target
+        {
+            let tab = self.tabs.remove(source);
+            self.tabs.insert(target, tab);
+            cx.notify();
+        }
+    }
+
+    fn start_tab_drag(&mut self, id: u32, position: Point<Pixels>) {
+        let Some(tab) = self.tabs.iter().find(|tab| tab.id == id) else {
+            return;
+        };
+        let left = tab.displayed_left.get();
+        self.tab_drag = Some(WorkspaceTabDrag {
+            id,
+            start: position,
+            moved: false,
+            start_left: left,
+            start_scroll: self.tab_scroll.offset().x,
+            left,
+        });
+    }
+
+    fn drag_tab_to(
+        &mut self,
+        position: Point<Pixels>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(drag) = &mut self.tab_drag else {
+            return false;
+        };
+        let delta = position.x - drag.start.x;
+        if !drag.moved && f32::from(delta).abs() <= 4.0 {
+            return false;
+        }
+        drag.moved = true;
+        let source = drag.id;
+        let pitch = window.rem_size() * (WORKSPACE_TAB_WIDTH + WORKSPACE_TAB_GAP);
+        let last = self.tabs.len().saturating_sub(1);
+        let left = (drag.start_left + delta + drag.start_scroll - self.tab_scroll.offset().x)
+            .clamp(px(0.), pitch * last as f32);
+        drag.left = left;
+        self.raised_tab = Some(source);
+        let target = (f32::from(left) / f32::from(pitch)).round() as usize;
+        if let Some(tab) = self.tabs.get(target) {
+            self.reorder_tab(source, tab.id, cx);
+        }
+        cx.notify();
+        true
+    }
+
+    fn finish_tab_drag(&mut self, cx: &mut Context<Self>) {
+        if self.tab_drag.take().is_some_and(|drag| drag.moved) {
+            cx.notify();
+        }
+    }
+
+    fn tab_drag_events(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
+        let owner = cx.weak_entity();
+        canvas(
+            |_, _, _| {},
+            move |_, _, window, _| {
+                let moving = owner.clone();
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Capture {
+                        let _ = moving.update(cx, |this, cx| {
+                            if event.pressed_button == Some(MouseButton::Left) {
+                                this.drag_tab_to(event.position, window, cx);
+                            } else {
+                                this.finish_tab_drag(cx);
+                            }
+                        });
+                    }
+                });
+                window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                        let dragged = owner
+                            .update(cx, |this, cx| {
+                                let dragged = this.drag_tab_to(event.position, window, cx);
+                                this.finish_tab_drag(cx);
+                                dragged
+                            })
+                            .unwrap_or(false);
+                        if dragged {
+                            cx.stop_propagation();
+                        }
+                    }
+                });
+            },
+        )
+        .absolute()
+        .inset_0()
+    }
+
     fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let id = self.next_tab_id;
         self.next_tab_id += 1;
@@ -1493,6 +1617,7 @@ impl Workspace {
             _url_subscription: Self::subscribe_to_url(&tab, cx),
             client: tab,
             archiving: false,
+            displayed_left: Cell::new(px(0.)),
         });
         self.select_tab(id, cx);
         if let Err(error) = self.callbacks.load_request.call2(
@@ -1587,7 +1712,7 @@ impl Workspace {
 }
 
 impl Render for Workspace {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette::get(cx);
         let chrome = palette.toolbar;
         let border = palette.separator;
@@ -1595,13 +1720,16 @@ impl Render for Workspace {
         let foreground = workspace_tab_foreground();
         let tab_style = ButtonCustomVariant::new(cx).foreground(foreground);
         let url_font = cx.theme().mono_font_family.clone();
+        let pitch = window.rem_size() * (WORKSPACE_TAB_WIDTH + WORKSPACE_TAB_GAP);
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
             .overflow_hidden()
             .font_family(cx.theme().font_family.clone())
             .text_color(palette.foreground)
+            .child(self.tab_drag_events(cx))
             .child(
                 Toolbar::new("http-client-toolbar")
                     .justify_end()
@@ -1654,12 +1782,24 @@ impl Render for Workspace {
                             .min_w_0()
                             .flex_1()
                             .flex()
-                            .gap_1()
+                            .gap(rems(WORKSPACE_TAB_GAP))
                             .overflow_x_scroll()
                             .track_scroll(&self.tab_scroll)
-                            .children(self.tabs.iter().map(|tab| {
+                            .children(self.tabs.iter().enumerate().map(|(slot, tab)| {
                                 let id = tab.id;
                                 let index = id as usize;
+                                let slot_left = pitch * slot as f32;
+                                let drag = self.tab_drag.as_ref().filter(|drag| drag.moved && drag.id == id);
+                                let position = transition_with_status(
+                                    ElementId::from(("workspace-tab-position", index)),
+                                    drag.map_or(slot_left, |drag| drag.left),
+                                    Transition::new(if drag.is_some() { Duration::ZERO } else { WORKSPACE_TAB_SLIDE }),
+                                    window,
+                                    cx,
+                                );
+                                tab.displayed_left.set(position.value);
+                                let raised = drag.is_some()
+                                    || (self.raised_tab == Some(id) && position.status == MotionStatus::Running);
                                 let selected = self.active_tab == id;
                                 let background = workspace_tab_background(index);
                                 let url = tab.client.read(cx).url.read(cx).value();
@@ -1670,25 +1810,27 @@ impl Render for Workspace {
                                 } else {
                                     format!("Request {}", id + 1)
                                 };
-                                div()
+                                let header = div()
                                     .id(("request-workspace-tab-frame", index))
                                     .relative()
-                                    .flex_none()
-                                    .w_40()
-                                    .h_8()
+                                    .size_full()
+                                    .left(position.value - slot_left)
+                                    .pr_5()
+                                    .rounded_tl(radius)
+                                    .rounded_tr(radius)
+                                    .bg(background)
                                     .child(Button::new(("request-workspace-tab", index))
                                     .custom(
                                         tab_style.hover(background.opacity(0.8)).active(background),
                                     )
-                                    .bg(background)
                                     .rounded(ButtonRounded::None)
                                     .rounded_tl(radius)
                                     .rounded_tr(radius)
                                     .h_8()
                                     .w_full()
                                     .px_2()
-                                    .pr_6()
-                                    .cursor_pointer()
+                                    .pr_1()
+                                    .cursor(if drag.is_some() { CursorStyle::ClosedHand } else { CursorStyle::OpenHand })
                                     .role(Role::Tab)
                                     .selected(selected)
                                     .accessibility_label(if url.is_empty() {
@@ -1724,7 +1866,10 @@ impl Render for Workspace {
                                     )
                                     .on_click(
                                         cx.listener(move |this, _, _, cx| this.select_tab(id, cx)),
-                                    ))
+                                    )
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, event: &gpui_kit::MouseDownEvent, _, _| {
+                                        this.start_tab_drag(id, event.position);
+                                    })))
                                     .child(
                                         Button::new(("close-request-tab", index))
                                             .custom(tab_style.hover(foreground.opacity(0.12)))
@@ -1754,7 +1899,17 @@ impl Render for Workspace {
                                                 cx.stop_propagation();
                                                 this.archive_tab(id, cx);
                                             })),
-                                    )
+                                    );
+                                div()
+                                    .relative()
+                                    .flex_none()
+                                    .w(rems(WORKSPACE_TAB_WIDTH))
+                                    .h_8()
+                                    .child(if raised {
+                                        deferred(header).into_any_element()
+                                    } else {
+                                        header.into_any_element()
+                                    })
                             })),
                     ),
             )
