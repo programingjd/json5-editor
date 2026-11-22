@@ -1,6 +1,18 @@
-use gpui_kit::Application;
+use gpui_kit::{AppContext as _, Application, ApplicationHandle};
 use std::{borrow::Cow, rc::Rc};
 use wasm_bindgen::JsValue;
+
+pub(super) fn consume_custom_context_menu(handle: &ApplicationHandle) -> bool {
+    handle.update(|cx| {
+        let Some(window) = cx.windows().into_iter().next() else {
+            return false;
+        };
+        cx.update_window(window, |_, window, cx| {
+            gpui_kit::component::context_menu::consume_custom_context_menu(window, cx)
+        })
+        .unwrap_or(false)
+    })
+}
 
 pub(super) fn web_application() -> Application {
     use gpui_kit::web::{CanvasFontFallback, WebBackendPreference, WebPlatform};

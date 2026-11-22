@@ -1,6 +1,6 @@
 import { loadFonts } from '../../editor/src/font-loader.js';
 import { readColorScheme, observeColorScheme } from '../../editor/src/color-scheme.js';
-import { preserveHistoryMouseButtons } from '../../editor/src/browser-shortcuts.js';
+import { preserveHistoryMouseButtons, preserveNativeContextMenu } from '../../editor/src/browser-shortcuts.js';
 import { DocumentClient } from '../../editor/src/document-client.js';
 import '../../editor/src/editor-shell.css';
 import { createPreviewTransport, prepareRequestBody } from './transport.js';
@@ -8,8 +8,9 @@ import { preview } from './preview.js';
 import { createProxyTransport } from '../proxy/client.js';
 import init, {
   advance_body_preparation, apply_syntax, begin_response, body_preparation_progress,
-  cancel_body_preparation, finish_archive, finish_request_error, install_body, install_non_json_response, prepare_body,
-  run, selected_response_header_text, set_binary_name, set_color_scheme, set_request_loading,
+  cancel_body_preparation, consume_custom_context_menu, finish_archive, finish_request_error,
+  install_body, install_non_json_response, prepare_body, run, selected_response_header_text,
+  set_binary_file, set_color_scheme, set_request_loading,
 } from './wasm/gpui_http_client_web.js';
 
 function downloadName({ headers, url }) {
@@ -103,7 +104,10 @@ function createTabDocuments(tab, transport) {
   let binaryFile;
   const setBinaryFile = file => {
     binaryFile = file;
-    set_binary_name(tab, file.name);
+    set_binary_file(tab, file.name, file.size);
+  };
+  const clearBinaryFile = () => {
+    binaryFile = undefined;
   };
   const send = (payload, text) => {
     // Return to GPUI after its click handler releases the view.
@@ -156,7 +160,7 @@ function createTabDocuments(tab, transport) {
       documents.worker?.terminate();
     }
   };
-  return { loadRequest, queueEdit, openResponse, reportResponseError, send, archive, setBinaryFile, downloadResponse, dispose };
+  return { loadRequest, queueEdit, openResponse, reportResponseError, send, archive, setBinaryFile, clearBinaryFile, downloadResponse, dispose };
 }
 
 async function start(transport, initial) {
@@ -196,6 +200,9 @@ async function start(transport, initial) {
     fileTab = tab;
     fileInput.click();
   };
+  const clearBinary = tab => {
+    tabs.get(tab)?.clearBinaryFile();
+  };
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     fileInput.value = '';
@@ -213,8 +220,22 @@ async function start(transport, initial) {
       catch (error) { documents.reportResponseError(error); }
     }
   });
-  run(readColorScheme().dark, inter, mono, interItalic, send, queueEdit, loadRequest, pickBinary, downloadResponse, closeTab, archiveTab, ready,
-    initialMetadata);
+  const requestDefaultsKey = 'json5-http-client.request-defaults';
+  let requestDefaults = '';
+  try {
+    requestDefaults = localStorage.getItem(requestDefaultsKey) ?? '';
+  } catch {
+    // Storage can be unavailable. Start with the built-in defaults.
+  }
+  const persistRequestDefaults = value => localStorage.setItem(requestDefaultsKey, value);
+  const stopContextMenu = preserveNativeContextMenu(() => consume_custom_context_menu());
+  try {
+    run(readColorScheme().dark, inter, mono, interItalic, send, queueEdit, loadRequest, pickBinary, clearBinary, downloadResponse, closeTab, archiveTab, ready,
+      initialMetadata, requestDefaults, persistRequestDefaults);
+  } catch (error) {
+    stopContextMenu();
+    throw error;
+  }
   // Browser menu commands can send a copy event without a keydown.
   const copyHeaders = event => {
     if (!event.clipboardData) return;
@@ -235,6 +256,7 @@ async function start(transport, initial) {
     for (const documents of tabs.values()) documents.dispose();
     stopTheme();
     stopHistory();
+    stopContextMenu();
     document.removeEventListener('copy', copyHeaders);
   });
 }

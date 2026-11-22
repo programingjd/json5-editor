@@ -66,6 +66,10 @@ impl TextInputState {
         dispatch!(self, |state| state.read(cx).presentation())
     }
 
+    pub(crate) fn input_bounds(&self, cx: &App) -> Bounds<Pixels> {
+        dispatch!(self, |state| state.read(cx).input_bounds())
+    }
+
     pub(crate) fn text<'a>(&self, cx: &'a App) -> &'a Rope {
         dispatch!(self, |state| state.read(cx).text())
     }

@@ -16,12 +16,13 @@ use gpui_kit::component::{
     menu::{DropdownMenu as _, PopupMenuItem},
     scroll::ScrollableElement as _,
     toolbar::Toolbar,
+    tooltip::Tooltip,
 };
 use gpui_kit::{
     Anchor, AnyElement, App, AppContext as _, Context, CursorStyle, DispatchPhase, Div,
-    DragMoveEvent, ElementId, EmptyView, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    ParentElement as _, Pixels, Point, Render, ScrollHandle, SharedString,
+    DragMoveEvent, ElementId, EmptyView, Entity, FocusHandle, Focusable as _,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseMoveEvent,
+    MouseUpEvent, ParentElement as _, Pixels, Point, Render, ScrollHandle, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, TextStyleRefinement, Window,
     accesskit::Role, canvas, deferred, div, prelude::FluentBuilder as _, px, relative, rems,
 };
@@ -31,10 +32,17 @@ use wasm_bindgen::JsValue;
 
 use crate::{
     DETAIL_PANE_MAX_WIDTH_REMS,
-    buttons::{action_button, field_button, field_button_icon, field_button_label},
+    buttons::{
+        action_button, checked_menu_item, field_button, field_button_icon, field_button_label,
+        small_icon,
+    },
     palette,
     query::url_with_default_scheme,
-    request_fields::{RequestFields, param_field, param_placeholder_color},
+    request_defaults::{
+        RequestDefaults, RequestDefaultsDialog, SettingInheritance, request_settings_controls,
+        set_timeout_input, timeout_input, timeout_seconds,
+    },
+    request_fields::RequestFields,
     response_headers::ResponseHeaders,
     timeline_foregrounds,
     tree_sitter_highlighter::{ParseSnapshot, SyntaxEditHandler, TreeSitterHighlighter},
@@ -43,7 +51,6 @@ use crate::{
 
 const METHODS: &[&str] = &["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const RESPONSE_TABS: &[&str] = &["Response", "Headers", "Cookies", "Timeline"];
-const DEFAULT_TIMEOUT_SECONDS: u32 = 30;
 const DEFAULT_REQUEST_FRACTION: f32 = 0.515;
 const MIN_PANE_FRACTION: f32 = 0.2;
 const REQUEST_PANE_CONTEXT: &str = "HttpRequestPane";
@@ -124,6 +131,7 @@ pub(super) struct ClientCallbacks {
     pub(super) queue_edit: Function,
     pub(super) load_request: Function,
     pub(super) pick_binary: Function,
+    pub(super) clear_binary: Function,
     pub(super) download_response: Function,
     pub(super) close_tab: Function,
     pub(super) archive_tab: Function,
@@ -269,13 +277,17 @@ pub(super) struct HttpClient {
     url_encoded_body: Entity<TextareaState>,
     multipart_body: Entity<TextareaState>,
     text_body: Entity<TextareaState>,
-    binary_name: Option<SharedString>,
+    binary_file: Option<(SharedString, SharedString)>,
     pick_binary: Function,
+    clear_binary: Function,
     params: Entity<RequestFields>,
     headers: Entity<RequestFields>,
+    defaults: RequestDefaults,
     timeout: Entity<InputState>,
     timeout_enabled: bool,
+    timeout_inherited: bool,
     follow_redirects: bool,
+    follow_redirects_inherited: bool,
     response_body: JsonBody,
     response_headers: Entity<ResponseHeaders>,
     response_text: Entity<TextareaState>,
@@ -295,6 +307,7 @@ pub(super) struct HttpClient {
     archiving: bool,
     error: Option<String>,
     _url_subscription: Subscription,
+    _timeout_subscription: Subscription,
 }
 
 impl HttpClient {
@@ -304,6 +317,7 @@ impl HttpClient {
         tab_id: u32,
         callbacks: &ClientCallbacks,
         preview: Preview,
+        defaults: &RequestDefaults,
     ) -> Self {
         let url = cx.new(|cx| {
             InputState::new(window, cx)
@@ -311,7 +325,15 @@ impl HttpClient {
                 .default_value(preview.url.clone())
         });
         let params = cx.new(|cx| RequestFields::query(url.clone(), window, cx));
-        let headers = cx.new(|cx| RequestFields::headers(&preview.headers, window, cx));
+        let headers =
+            cx.new(|cx| RequestFields::request_headers(defaults, &preview.headers, window, cx));
+        let timeout = cx.new(|cx| timeout_input(defaults.timeout_seconds, window, cx));
+        let timeout_subscription = cx.subscribe(&timeout, |this, _, event, cx| {
+            if matches!(event, InputEvent::Change) && this.timeout_inherited {
+                this.timeout_inherited = false;
+                cx.notify();
+            }
+        });
         let response_headers = cx.new(|cx| ResponseHeaders::new(&[], window, cx));
         let url_subscription = cx.subscribe_in(&url, window, |this, _, event, window, cx| {
             if matches!(event, InputEvent::Blur) {
@@ -372,23 +394,17 @@ impl HttpClient {
             url_encoded_body: cx.new(|cx| TextareaState::new(window, cx).placeholder("name=value")),
             multipart_body: cx.new(|cx| TextareaState::new(window, cx).placeholder("name=value")),
             text_body: cx.new(|cx| TextareaState::new(window, cx)),
-            binary_name: None,
+            binary_file: None,
             pick_binary: callbacks.pick_binary.clone(),
+            clear_binary: callbacks.clear_binary.clone(),
             params,
             headers,
-            timeout: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder(DEFAULT_TIMEOUT_SECONDS.to_string())
-                    .default_value(DEFAULT_TIMEOUT_SECONDS.to_string())
-                    .validate(|text, _| {
-                        text.is_empty()
-                            || (text.len() <= 3
-                                && text.bytes().all(|byte| byte.is_ascii_digit())
-                                && text.parse::<u32>().is_ok_and(|seconds| seconds > 0))
-                    })
-            }),
-            timeout_enabled: false,
-            follow_redirects: true,
+            defaults: defaults.clone(),
+            timeout,
+            timeout_enabled: defaults.timeout_seconds.is_some(),
+            timeout_inherited: true,
+            follow_redirects: defaults.follow_redirects,
+            follow_redirects_inherited: true,
             response_body,
             response_headers,
             response_text: cx.new(|cx| {
@@ -410,7 +426,49 @@ impl HttpClient {
             archiving: false,
             error: None,
             _url_subscription: url_subscription,
+            _timeout_subscription: timeout_subscription,
         }
+    }
+
+    pub(super) fn apply_defaults(
+        &mut self,
+        defaults: &RequestDefaults,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.defaults = defaults.clone();
+        if self.timeout_inherited {
+            self.timeout_enabled = defaults.timeout_seconds.is_some();
+            set_timeout_input(&self.timeout, defaults.timeout_seconds, window, cx);
+        }
+        if self.follow_redirects_inherited {
+            self.follow_redirects = defaults.follow_redirects;
+        }
+        self.headers.update(cx, |headers, cx| {
+            headers.sync_defaults(defaults, window, cx)
+        });
+        cx.notify();
+    }
+
+    fn toggle_timeout_inheritance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.timeout_inherited {
+            self.timeout_inherited = false;
+        } else {
+            self.timeout_enabled = self.defaults.timeout_seconds.is_some();
+            set_timeout_input(&self.timeout, self.defaults.timeout_seconds, window, cx);
+            self.timeout_inherited = true;
+        }
+        cx.notify();
+    }
+
+    fn toggle_redirect_inheritance(&mut self, cx: &mut Context<Self>) {
+        if self.follow_redirects_inherited {
+            self.follow_redirects_inherited = false;
+        } else {
+            self.follow_redirects = self.defaults.follow_redirects;
+            self.follow_redirects_inherited = true;
+        }
+        cx.notify();
     }
 
     fn normalize_url(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -463,17 +521,9 @@ impl HttpClient {
             url: self.url.read(cx).value().trim().to_owned(),
             headers: self.headers.read(cx).header_text(cx),
             body_format: self.body_format,
-            timeout_ms: if self.timeout_enabled {
-                u64::from(
-                    self.timeout
-                        .read(cx)
-                        .value()
-                        .parse()
-                        .unwrap_or(DEFAULT_TIMEOUT_SECONDS),
-                ) * 1000
-            } else {
-                0
-            },
+            timeout_ms: u64::from(
+                timeout_seconds(&self.timeout, self.timeout_enabled, cx).unwrap_or(0),
+            ) * 1000,
             follow_redirects: self.follow_redirects,
         }
     }
@@ -493,8 +543,16 @@ impl HttpClient {
         }
     }
 
-    pub(super) fn set_binary_name(&mut self, name: String, cx: &mut Context<Self>) {
-        self.binary_name = Some(name.into());
+    pub(super) fn set_binary_file(&mut self, name: String, size: u64, cx: &mut Context<Self>) {
+        self.binary_file = Some((name.into(), format_byte_size(size).into()));
+        cx.notify();
+    }
+
+    fn clear_binary_file(&mut self, cx: &mut Context<Self>) {
+        self.binary_file = None;
+        let _ = self
+            .clear_binary
+            .call1(&JsValue::UNDEFINED, &JsValue::from(self.tab_id));
         cx.notify();
     }
 
@@ -918,15 +976,7 @@ impl HttpClient {
                     .into_iter()
                     .fold(menu.with_size(Size::Small), |menu, option| {
                         let owner = owner.clone();
-                        let item = PopupMenuItem::new(option.label()).checked(option == format);
-                        let item = if option == format {
-                            item.icon(
-                                Icon::default()
-                                    .data(include_bytes!("../../../assets/icons/check.svg")),
-                            )
-                        } else {
-                            item
-                        };
+                        let item = checked_menu_item(option.label(), option == format);
                         menu.item(item.on_click(move |_, window, cx| {
                             let _ = owner.update(cx, |this, cx| {
                                 if this.body_format != option {
@@ -958,157 +1008,45 @@ impl HttpClient {
     }
 
     fn request_settings(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let palette = palette::get(cx);
-        let thumb = palette.icon;
-        let track = if self.follow_redirects {
-            palette.selection
-        } else {
-            palette.hover
-        };
-        let switch_style = ButtonCustomVariant::new(cx)
-            .color(track)
-            .hover(track.opacity(0.8))
-            .active(track.opacity(0.7));
-        div()
-            .w_full()
-            .max_w(rems(DETAIL_PANE_MAX_WIDTH_REMS))
-            .mx_auto()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .text_sm()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child("Timeout")
-                    .child(self.timeout_field(cx)),
-            )
-            .child(div().w_full().h(px(1.0)).bg(palette.border.opacity(0.6)))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child("Follow redirect")
-                    .child(
-                        Button::new("follow-redirects")
-                            .custom(switch_style)
-                            .role(Role::Switch)
-                            .accessibility_label("Follow redirect")
-                            .toggled(self.follow_redirects)
-                            .cursor_pointer()
-                            .w_8()
-                            .h_4()
-                            .p_0p5()
-                            .rounded_full()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .when(self.follow_redirects, |row| row.justify_end())
-                                    .child(div().size_3().rounded_full().bg(thumb)),
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.follow_redirects = !this.follow_redirects;
-                                cx.notify();
-                            })),
-                    ),
-            )
-    }
-
-    fn timeout_field(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
-        let enabled = self.timeout_enabled;
         let owner = cx.weak_entity();
-        let muted = cx.theme().muted_foreground;
-        let placeholder = param_placeholder_color(cx);
-        let chevron = field_button_icon(
-            include_bytes!("../../../assets/icons/chevron-down.svg"),
-            rems(0.75),
-            muted,
-            true,
-        );
-        let menu = field_button("timeout-options", cx)
-            .with_size(Size::Small)
-            .cursor_pointer()
-            .accessibility_label(if enabled {
-                "Timeout options"
-            } else {
-                "No timeout"
-            })
-            .map(|button| {
-                if enabled {
-                    button.min_w_6().child(chevron)
-                } else {
-                    button.w_full().child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .text_color(placeholder)
-                            .child("No timeout")
-                            .child(chevron),
-                    )
-                }
-            })
-            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-                [(true, "Edit"), (false, "No timeout")].into_iter().fold(
-                    menu.with_size(Size::Small),
-                    |menu, (edit, label)| {
-                        let owner = owner.clone();
-                        let checked = enabled == edit;
-                        let item = PopupMenuItem::new(label).checked(checked);
-                        let item = if checked {
-                            item.icon(
-                                Icon::default()
-                                    .data(include_bytes!("../../../assets/icons/check.svg")),
-                            )
-                        } else {
-                            item
-                        };
-                        menu.item(item.on_click(move |_, window, cx| {
-                            let _ = owner.update(cx, |this, cx| {
-                                this.timeout_enabled = edit;
-                                if edit {
-                                    let focus = this.timeout.read(cx).focus_handle(cx);
-                                    window.on_next_frame(move |window, cx| focus.focus(window, cx));
-                                }
-                                cx.notify();
-                            });
-                        }))
-                    },
-                )
-            });
-        param_field(!enabled, cx)
-            .flex_none()
-            .w(rems(if enabled { 5.25 } else { 6.5 }))
-            .when(enabled, |field| {
-                field
-                    .child(
-                        div().flex_1().min_w_0().child(
-                            Input::new(&self.timeout)
-                                .with_size(Size::Small)
-                                .appearance(false)
-                                .bordered(false)
-                                .aria_label("Timeout in seconds")
-                                .px_2()
-                                .w_full(),
-                        ),
-                    )
-                    .child(div().text_color(muted).child("s"))
-            })
-            .when(!enabled, |field| {
-                field.flex_col().items_stretch().justify_center()
-            })
-            .child(menu)
+        request_settings_controls(
+            &self.timeout,
+            self.timeout_enabled,
+            self.follow_redirects,
+            move |enabled, _, cx| {
+                let _ = owner.update(cx, |this, cx| {
+                    if this.timeout_enabled != enabled {
+                        this.timeout_enabled = enabled;
+                        this.timeout_inherited = false;
+                        cx.notify();
+                    }
+                });
+            },
+            cx.listener(|this, _, _, cx| {
+                this.follow_redirects = !this.follow_redirects;
+                this.follow_redirects_inherited = false;
+                cx.notify();
+            }),
+            Some(SettingInheritance {
+                inherited: self.timeout_inherited,
+                on_click: Box::new(cx.listener(|this, _, window, cx| {
+                    this.toggle_timeout_inheritance(window, cx);
+                })),
+            }),
+            Some(SettingInheritance {
+                inherited: self.follow_redirects_inherited,
+                on_click: Box::new(cx.listener(|this, _, _, cx| {
+                    this.toggle_redirect_inheritance(cx);
+                })),
+            }),
+            cx,
+        )
+        .max_w(rems(DETAIL_PANE_MAX_WIDTH_REMS))
+        .mx_auto()
+        .p_4()
     }
 
-    fn request_body_content(&self, cx: &App) -> AnyElement {
+    fn request_body_content(&self, cx: &mut Context<Self>) -> AnyElement {
         if let Some(field) = self.body_textarea() {
             return Textarea::new(field)
                 .appearance(false)
@@ -1127,27 +1065,68 @@ impl HttpClient {
                 .render(false, self.request_loading, cx)
                 .into_any_element(),
             BodyFormat::Binary => {
-                let tab_id = self.tab_id;
-                let pick_binary = self.pick_binary.clone();
-                div()
+                let icon_color = cx.theme().muted_foreground;
+                let container = div()
+                    .id("binary-body")
+                    .size_full()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .pt(rems(3.0))
+                    .pb_2()
                     .flex()
+                    .flex_col()
                     .items_center()
-                    .gap_2()
-                    .p_2()
-                    .child(
-                        Button::new("request-binary-file")
-                            .with_size(Size::Small)
-                            .cursor_pointer()
-                            .label("Choose file")
-                            .on_click(move |_, _, _| {
-                                let _ =
-                                    pick_binary.call1(&JsValue::UNDEFINED, &JsValue::from(tab_id));
-                            }),
-                    )
-                    .when_some(self.binary_name.clone(), |row, name| {
-                        row.child(div().min_w_0().truncate().child(name))
-                    })
-                    .into_any_element()
+                    .gap_1();
+                if let Some((name, size)) = self.binary_file.clone() {
+                    let full_name = name.clone();
+                    container
+                        .child(
+                            div()
+                                .id("binary-file-name")
+                                .max_w_full()
+                                .truncate()
+                                .text_sm()
+                                .tooltip(move |window, cx| {
+                                    Tooltip::new(full_name.clone()).build(window, cx)
+                                })
+                                .child(name),
+                        )
+                        .child(div().text_xs().text_color(icon_color).child(size))
+                        .child(
+                            action_button("remove-binary-file", cx)
+                                .with_size(Size::Small)
+                                .tooltip("Remove file")
+                                .accessibility_label("Remove file")
+                                .icon(small_icon(
+                                    include_bytes!("../../../assets/icons/delete.svg"),
+                                    icon_color,
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| this.clear_binary_file(cx))),
+                        )
+                        .into_any_element()
+                } else {
+                    let tab_id = self.tab_id;
+                    let pick_binary = self.pick_binary.clone();
+                    container
+                        .child(
+                            action_button("request-binary-file", cx)
+                                .size(rems(3.0))
+                                .p_0()
+                                .tooltip("Choose file")
+                                .accessibility_label("Choose file")
+                                .child(
+                                    Icon::default()
+                                        .data(include_bytes!("../../../assets/icons/open.svg"))
+                                        .size(rems(2.0))
+                                        .text_color(icon_color),
+                                )
+                                .on_click(move |_, _, _| {
+                                    let _ = pick_binary
+                                        .call1(&JsValue::UNDEFINED, &JsValue::from(tab_id));
+                                }),
+                        )
+                        .into_any_element()
+                }
             }
             _ => div().into_any_element(),
         }
@@ -1441,6 +1420,10 @@ pub(super) struct Workspace {
     tab_drag: Option<WorkspaceTabDrag>,
     raised_tab: Option<u32>,
     callbacks: ClientCallbacks,
+    defaults: RequestDefaults,
+    persist_request_defaults: Function,
+    settings_dialog: Option<Entity<RequestDefaultsDialog>>,
+    settings_previous_focus: Option<FocusHandle>,
 }
 
 impl Workspace {
@@ -1449,8 +1432,10 @@ impl Workspace {
         cx: &mut Context<Self>,
         callbacks: ClientCallbacks,
         preview: Preview,
+        defaults: RequestDefaults,
+        persist_request_defaults: Function,
     ) -> Self {
-        let first_tab = cx.new(|cx| HttpClient::new(window, cx, 0, &callbacks, preview));
+        let first_tab = cx.new(|cx| HttpClient::new(window, cx, 0, &callbacks, preview, &defaults));
         Self {
             tabs: vec![WorkspaceTab {
                 id: 0,
@@ -1465,7 +1450,64 @@ impl Workspace {
             tab_drag: None,
             raised_tab: None,
             callbacks,
+            defaults,
+            persist_request_defaults,
+            settings_dialog: None,
+            settings_previous_focus: None,
         }
+    }
+
+    pub(super) fn save_defaults(
+        &mut self,
+        defaults: RequestDefaults,
+        persist_to_storage: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.defaults = defaults;
+        self.apply_defaults_to_tabs(window, cx);
+        if !persist_to_storage {
+            return true;
+        }
+        serde_json::to_string(&self.defaults).is_ok_and(|value| {
+            self.persist_request_defaults
+                .call1(&JsValue::UNDEFINED, &JsValue::from_str(&value))
+                .is_ok()
+        })
+    }
+
+    fn apply_defaults_to_tabs(&self, window: &mut Window, cx: &mut Context<Self>) {
+        for tab in &self.tabs {
+            tab.client.update(cx, |client, cx| {
+                client.apply_defaults(&self.defaults, window, cx)
+            });
+        }
+    }
+
+    fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(dialog) = &self.settings_dialog {
+            let focus = dialog.read(cx).focus_handle(cx);
+            window.on_next_frame(move |window, cx| focus.focus(window, cx));
+            return;
+        }
+        let owner = cx.weak_entity();
+        let dialog = cx.new(|cx| RequestDefaultsDialog::new(&self.defaults, owner, window, cx));
+        self.settings_previous_focus = window.focused(cx);
+        let focus = dialog.read(cx).focus_handle(cx);
+        self.settings_dialog = Some(dialog);
+        window.on_next_frame(move |window, cx| focus.focus(window, cx));
+        cx.notify();
+    }
+
+    pub(super) fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_dialog = None;
+        if self.defaults.clear_live_header_ids() {
+            self.apply_defaults_to_tabs(window, cx);
+        }
+        if let Some(previous) = self.settings_previous_focus.take() {
+            previous.focus(window, cx);
+        }
+        cx.notify();
     }
 
     pub(super) fn tab(&self, id: u32) -> Option<Entity<HttpClient>> {
@@ -1610,7 +1652,16 @@ impl Workspace {
     fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let id = self.next_tab_id;
         self.next_tab_id += 1;
-        let tab = cx.new(|cx| HttpClient::new(window, cx, id, &self.callbacks, Preview::default()));
+        let tab = cx.new(|cx| {
+            HttpClient::new(
+                window,
+                cx,
+                id,
+                &self.callbacks,
+                Preview::default(),
+                &self.defaults,
+            )
+        });
         tab.read(cx).url.read(cx).focus_handle(cx).focus(window, cx);
         self.tabs.push(WorkspaceTab {
             id,
@@ -1683,7 +1734,7 @@ impl Workspace {
             tab.archiving = false;
             tab.client.update(cx, |client, cx| {
                 client.archiving = false;
-                client.error = Some(format!("Could not archive request: {error:?}").into());
+                client.error = Some(format!("Could not archive request: {error:?}"));
                 cx.notify();
             });
         }
@@ -1703,7 +1754,7 @@ impl Workspace {
             tab.archiving = false;
             tab.client.update(cx, |client, cx| {
                 client.archiving = false;
-                client.error = Some(format!("Could not archive request: {error}").into());
+                client.error = Some(format!("Could not archive request: {error}"));
                 cx.notify();
             });
             cx.notify();
@@ -1736,6 +1787,14 @@ impl Render for Workspace {
                     .bg(chrome)
                     .border_b_1()
                     .border_color(border)
+                    .content(
+                        action_button("http-client-settings", cx)
+                            .with_size(Size::Small)
+                            .icon(Icon::default().data(include_bytes!("../../../assets/icons/settings.svg")))
+                            .tooltip("Settings")
+                            .accessibility_label("Settings")
+                            .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+                    )
                     .content(
                         action_button("http-client-overflow", cx)
                             .with_size(Size::Small)
@@ -1914,7 +1973,22 @@ impl Render for Workspace {
                     ),
             )
             .child(self.tab(self.active_tab).expect("Active request tab"))
+            .children(self.settings_dialog.clone())
     }
+}
+
+fn format_byte_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let units = ["KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < units.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", units[unit])
 }
 
 fn exchange_header() -> Div {

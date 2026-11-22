@@ -11,6 +11,7 @@ use gpui::{
 use crate::button::{Button, ButtonVariants as _};
 use crate::context_menu::ContextMenu;
 use crate::input::clear_button;
+use crate::root::WindowState;
 use crate::spinner::Spinner;
 use crate::touch_selection::{EditMenuItem, TouchSelectionOverlay};
 use crate::{ActiveTheme, Colorize, v_flex};
@@ -459,12 +460,21 @@ impl Input {
     fn render_editor(
         input_state: TextInputState,
         search_panel: Option<AnyElement>,
+        disabled: bool,
         _: &Window,
     ) -> impl IntoElement {
         v_flex().size_full().children(search_panel).child(
             div()
                 .relative()
                 .flex_1()
+                .on_mouse_down(MouseButton::Right, move |_, window, cx| {
+                    // InputBaseState's `track_focus` sets `default_prevented` while
+                    // bubbling `MouseDown` so ancestors do not steal focus; do not
+                    // treat that focus guard as cancelling the context-menu press.
+                    if !disabled {
+                        WindowState::arm_context_menu(window, cx);
+                    }
+                })
                 .child(input_state.into_any_element()),
         )
     }
@@ -588,6 +598,11 @@ impl RenderOnce for Input {
         let custom = self.context_menu_builder.clone();
         state.on_context_menu(
             Rc::new(move |capabilities, position, window, cx| {
+                // Ignore stale right-click state left behind when a previous
+                // press started inside the input and released outside it.
+                if !WindowState::take_input_context_menu_gesture(window, cx) {
+                    return;
+                }
                 let menu = if let Some(custom) = custom.as_ref() {
                     custom(ContextMenu::new(), window, cx)
                 } else {
@@ -700,11 +715,20 @@ impl RenderOnce for Input {
             .track_focus(&frame_focus_handle)
             .on_mouse_down(MouseButton::Right, {
                 let state = state.clone();
-                move |_, window, cx| {
+                move |event, window, cx| {
                     // The text element has already taken focus. Publish its state
                     // before an outer ContextMenu resolves the selection owner;
                     // render-time registration still names the previous input.
                     sync_focused_input_registry(&state, window, cx);
+                    // InputBaseState's `track_focus` sets `default_prevented` on
+                    // `MouseDown` as it bubbles; arm whenever the press landed
+                    // within the enabled single-line text area.
+                    if !disabled && !is_multi_line {
+                        let bounds = state.input_bounds(cx);
+                        if bounds.left() <= event.position.x && event.position.x <= bounds.right() {
+                            WindowState::arm_context_menu(window, cx);
+                        }
+                    }
                 }
             })
             .when(disabled, |this| {
@@ -767,7 +791,12 @@ impl RenderOnce for Input {
                     .child(p)
             }))
             .when(presentation.is_multi_line(), |this| {
-                this.child(Self::render_editor(state.clone(), overlays.search, window))
+                this.child(Self::render_editor(
+                    state.clone(),
+                    overlays.search,
+                    disabled,
+                    window,
+                ))
             })
             .when(!presentation.is_multi_line(), |this| {
                 this.child(state.clone().into_any_element())

@@ -16,6 +16,12 @@ enum ContextMenuItem {
     },
 }
 
+/// Reports whether the latest right-click gesture claimed a custom GPUI context
+/// menu and clears the recorded claim.
+pub fn consume_custom_context_menu(window: &mut Window, cx: &mut App) -> bool {
+    WindowState::consume_context_menu_claim(window, cx)
+}
+
 #[derive(Default)]
 pub struct ContextMenu {
     items: Vec<ContextMenuItem>,
@@ -58,6 +64,7 @@ impl ContextMenu {
             overlay.update(cx, |overlay, cx| {
                 overlay.show(self.items, position, action_context, window, cx);
             });
+            WindowState::mark_context_menu_opened(window, cx);
         }
     }
 }
@@ -96,10 +103,12 @@ impl ContextMenuOverlay {
                 } => menu.menu_with_check_and_disabled(label, false, action, disabled),
             })
         });
-        let subscription = cx.subscribe(&menu, |this, _, _: &DismissEvent, cx| {
-            this.active = None;
-            cx.notify();
-        });
+        let subscription =
+            cx.subscribe_in(&menu, window, |this, _, _: &DismissEvent, window, cx| {
+                this.active = None;
+                WindowState::clear_context_menu_opened(window, cx);
+                cx.notify();
+            });
         menu.focus_handle(cx).focus(window, cx);
         self.active = Some(ActiveMenu {
             menu,

@@ -953,6 +953,16 @@ pub fn open_search() {
     });
 }
 
+#[wasm_bindgen]
+pub fn consume_custom_context_menu() -> bool {
+    APPLICATION.with(|application| {
+        application
+            .borrow()
+            .as_ref()
+            .is_some_and(web_support::consume_custom_context_menu)
+    })
+}
+
 // CSS is the source of truth; this only updates GPUI's render snapshot.
 #[wasm_bindgen]
 pub fn set_color_scheme(dark: bool, overridden: bool) {

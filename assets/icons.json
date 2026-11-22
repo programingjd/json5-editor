@@ -17,6 +17,24 @@
   },
   "icons": [
     {
+      "file": "icons/force-refresh.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/AllIcons/expui/actions/forceRefresh.svg",
+      "sha256": "0611e1d6ad56154b598205a640fa0427fe4c168778c7711d853e5ed9ddc3c1a7",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/inherited-attribute-overlay.svg",
+      "source": "https://intellij-icons.jetbrains.design/icons/JavaUltimateIcons/icons/javaee/newui/inheritedAttributeOverlay.svg",
+      "sha256": "df3a319f6411e1255dcff8233d0dc6b326a4c93bafd4b0bd91afa215d9865b25",
+      "provider": "jetbrains"
+    },
+    {
+      "file": "icons/settings.svg",
+      "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/settings.svg",
+      "sha256": "81d7bb2e91986a47e9e40287d4da9c4719905378ecac8b26234b7d2bf95127ed",
+      "provider": "jetbrains"
+    },
+    {
       "file": "icons/delete.svg",
       "source": "https://raw.githubusercontent.com/JetBrains/intellij-community/master/platform/icons/src/expui/general/delete.svg",
       "sha256": "90ce02aac2a0ccf60e7d9470e192d72e7b1bbe046a17a5f4f5941c73c04e594d",

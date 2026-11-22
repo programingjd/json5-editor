@@ -13,6 +13,7 @@ mod header_picker;
 #[path = "../../editor/src/palette.rs"]
 mod palette;
 mod query;
+mod request_defaults;
 mod request_fields;
 mod response_headers;
 #[path = "../../editor/src/syntax_data.rs"]
@@ -23,6 +24,7 @@ mod tree_sitter_highlighter;
 mod web_support;
 
 use client::{ClientCallbacks, HttpClient, Workspace};
+use request_defaults::RequestDefaults;
 
 thread_local! {
     static APPLICATION: RefCell<Option<ApplicationHandle>> = const { RefCell::new(None) };
@@ -41,11 +43,14 @@ pub fn run(
     queue_edit: Function,
     load_request: Function,
     pick_binary: Function,
+    clear_binary: Function,
     download_response: Function,
     close_tab: Function,
     archive_tab: Function,
     ready: Function,
     preview: String,
+    request_defaults: String,
+    persist_request_defaults: Function,
 ) -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
     let fonts = vec![
@@ -70,11 +75,21 @@ pub fn run(
                 queue_edit,
                 load_request,
                 pick_binary,
+                clear_binary,
                 download_response,
                 close_tab,
                 archive_tab,
             };
-            cx.new(|cx| Workspace::new(window, cx, callbacks, preview))
+            cx.new(|cx| {
+                Workspace::new(
+                    window,
+                    cx,
+                    callbacks,
+                    preview,
+                    RequestDefaults::from_storage(&request_defaults),
+                    persist_request_defaults,
+                )
+            })
         })
         .expect("Open HTTP client window");
         cx.set_global(ClientView(view));
@@ -144,6 +159,41 @@ fn update_view<T>(
     value
 }
 
+fn update_workspace_in_window<T>(
+    update: impl FnOnce(&mut Workspace, &mut gpui_kit::Window, &mut gpui_kit::Context<Workspace>) -> T,
+) -> Option<T> {
+    let mut value = None;
+    update_app(|cx| {
+        let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) else {
+            return;
+        };
+        let Some(window) = cx.windows().into_iter().next() else {
+            return;
+        };
+        let _ = cx.update_window(window, |_, window, cx| {
+            value = Some(view.update(cx, |view, cx| update(view, window, cx)));
+        });
+    });
+    value
+}
+
+fn update_view_in_window<T>(
+    tab_id: u32,
+    update: impl FnOnce(&mut HttpClient, &mut gpui_kit::Window, &mut gpui_kit::Context<HttpClient>) -> T,
+) -> Option<T> {
+    let mut value = None;
+    update_app(|cx| {
+        let (Some(view), Some(window)) = (client_tab(tab_id, cx), cx.windows().into_iter().next())
+        else {
+            return;
+        };
+        let _ = cx.update_window(window, |_, window, cx| {
+            value = Some(view.update(cx, |view, cx| update(view, window, cx)));
+        });
+    });
+    value
+}
+
 fn client_tab(tab_id: u32, cx: &App) -> Option<Entity<HttpClient>> {
     cx.try_global::<ClientView>()?.0.read(cx).tab(tab_id)
 }
@@ -159,39 +209,24 @@ pub fn set_color_scheme(dark: bool) {
 }
 
 #[wasm_bindgen]
+pub fn consume_custom_context_menu() -> bool {
+    APPLICATION.with(|application| {
+        application
+            .borrow()
+            .as_ref()
+            .is_some_and(web_support::consume_custom_context_menu)
+    })
+}
+
+#[wasm_bindgen]
 pub fn finish_archive(tab_id: u32, error: String) {
-    update_app(|cx| {
-        let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) else {
-            return;
-        };
-        let Some(window) = cx.windows().into_iter().next() else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, cx| {
-                view.finish_archive(tab_id, error, window, cx)
-            });
-        });
-    });
+    update_workspace_in_window(|view, window, cx| view.finish_archive(tab_id, error, window, cx));
 }
 
 #[wasm_bindgen]
 pub fn selected_response_header_text() -> String {
-    let mut text = String::new();
-    update_app(|cx| {
-        let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) else {
-            return;
-        };
-        let Some(window) = cx.windows().into_iter().next() else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, cx| {
-            text = view.update(cx, |view, cx| {
-                view.selected_response_header_text(window, cx)
-            });
-        });
-    });
-    text
+    update_workspace_in_window(|view, window, cx| view.selected_response_header_text(window, cx))
+        .unwrap_or_default()
 }
 
 #[wasm_bindgen]
@@ -209,19 +244,10 @@ pub fn finish_request_error(tab_id: u32, error: String, timeline: String) {
 
 #[wasm_bindgen]
 pub fn install_non_json_response(tab_id: u32, metadata: String, body: String) -> bool {
-    let mut installed = false;
-    update_app(|cx| {
-        let (Some(view), Some(window)) = (client_tab(tab_id, cx), cx.windows().into_iter().next())
-        else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, cx| {
-            installed = view.update(cx, |view, cx| {
-                view.install_non_json_response(&metadata, body, window, cx)
-            });
-        });
-    });
-    installed
+    update_view_in_window(tab_id, |view, window, cx| {
+        view.install_non_json_response(&metadata, body, window, cx)
+    })
+    .unwrap_or(false)
 }
 
 #[wasm_bindgen]
@@ -230,8 +256,10 @@ pub fn set_request_loading(tab_id: u32, loading: bool) {
 }
 
 #[wasm_bindgen]
-pub fn set_binary_name(tab_id: u32, name: String) {
-    update_view(tab_id, |view, cx| view.set_binary_name(name, cx));
+pub fn set_binary_file(tab_id: u32, name: String, size: f64) {
+    update_view(tab_id, |view, cx| {
+        view.set_binary_file(name, size.max(0.0) as u64, cx)
+    });
 }
 
 #[wasm_bindgen]
@@ -273,30 +301,19 @@ pub fn install_body(
     brackets: Vec<u32>,
     diagnostics: String,
 ) -> bool {
-    let mut installed = false;
-    update_app(|cx| {
-        let Some(view) = client_tab(tab_id, cx) else {
-            return;
-        };
-        let Some(window) = cx.windows().into_iter().next() else {
-            return;
-        };
-        let _ = cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, cx| {
-                installed = view.install_body(
-                    response,
-                    &metadata,
-                    &highlights,
-                    &folds,
-                    &brackets,
-                    &diagnostics,
-                    window,
-                    cx,
-                );
-            });
-        });
-    });
-    installed
+    update_view_in_window(tab_id, |view, window, cx| {
+        view.install_body(
+            response,
+            &metadata,
+            &highlights,
+            &folds,
+            &brackets,
+            &diagnostics,
+            window,
+            cx,
+        )
+    })
+    .unwrap_or(false)
 }
 
 #[wasm_bindgen]

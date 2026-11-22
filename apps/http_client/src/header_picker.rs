@@ -4,7 +4,7 @@ use gpui_kit::base::input::{Enter, InputEvent};
 use gpui_kit::component::{
     ActiveTheme as _, Sizable as _, Size,
     button::{Button, ButtonVariants as _},
-    input::{Input, InputState},
+    input::InputState,
     popover::PopoverState,
     scroll::ScrollableElement as _,
 };
@@ -13,6 +13,8 @@ use gpui_kit::{
     ParentElement as _, Point, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _,
     Subscription, WeakEntity, Window, div, rems,
 };
+
+use crate::buttons::field_input;
 
 const HEADERS: &[&str] = &[
     "Accept",
@@ -123,15 +125,7 @@ impl Render for HeaderPicker {
                     .border_1()
                     .border_color(border)
                     .rounded(cx.theme().radius)
-                    .child(
-                        Input::new(&self.search)
-                            .with_size(Size::Small)
-                            .appearance(false)
-                            .bordered(false)
-                            .aria_label("Search headers")
-                            .px_2()
-                            .w_full(),
-                    ),
+                    .child(field_input(&self.search, "Search headers")),
             )
             .child(
                 div()
