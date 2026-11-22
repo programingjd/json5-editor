@@ -5,13 +5,20 @@ use crate::{
     touch_selection::WindowTouchSelectionOverlay,
 };
 use gpui::{
-    App, AppContext, Bounds, Context, DispatchPhase, Entity, GlobalElementId, IntoElement,
-    MouseMoveEvent, ParentElement, Pixels, Render, Styled, Window, canvas, div,
+    AnyElement, App, AppContext, Bounds, Context, DispatchPhase, Entity, GlobalElementId,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Pixels, Render, Styled, Window, canvas, div,
 };
 use gpui_base::{TextSelection, TextSelectionScopeId};
 
 pub(crate) fn init(cx: &mut App) {
     gpui_base::Root::register_plugin::<WindowState>(cx, WindowState::new);
+}
+#[derive(Default)]
+struct ContextMenuClaim {
+    armed: bool,
+    opened: bool,
+    input_gesture: bool,
 }
 pub(crate) struct WindowState {
     pub(super) focused_input: Option<AnyInputState>,
@@ -20,6 +27,7 @@ pub(crate) struct WindowState {
     tooltip_trigger_lifetime: std::rc::Weak<()>,
     tooltip_pressed_trigger: Option<Bounds<Pixels>>,
     context_menu_overlay: Entity<ContextMenuOverlay>,
+    context_menu_claim: ContextMenuClaim,
     touch_selection_overlay: Entity<WindowTouchSelectionOverlay>,
 }
 impl WindowState {
@@ -30,6 +38,7 @@ impl WindowState {
             tooltip_trigger_lifetime: std::rc::Weak::new(),
             tooltip_pressed_trigger: None,
             context_menu_overlay: cx.new(|_| ContextMenuOverlay::new()),
+            context_menu_claim: ContextMenuClaim::default(),
             tooltip_overlay: cx
                 .new(|_| gpui_base::TooltipOverlay::new().render_with(render_tooltip)),
             touch_selection_overlay: cx.new(|cx| WindowTouchSelectionOverlay::new(window, cx)),
@@ -147,6 +156,55 @@ impl WindowState {
     ) -> Option<Entity<ContextMenuOverlay>> {
         Some(Self::try_read(window, cx)?.context_menu_overlay.clone())
     }
+
+    pub(crate) fn arm_context_menu(window: &mut Window, cx: &mut App) {
+        Self::try_update(window, cx, |state, _, _| {
+            state.context_menu_claim.armed = true;
+            state.context_menu_claim.input_gesture = true;
+        });
+    }
+
+    pub(crate) fn take_input_context_menu_gesture(window: &mut Window, cx: &mut App) -> bool {
+        Self::try_update(window, cx, |state, _, _| {
+            std::mem::take(&mut state.context_menu_claim.input_gesture)
+        })
+        .unwrap_or(true)
+    }
+
+    pub(crate) fn mark_context_menu_opened(window: &mut Window, cx: &mut App) {
+        Self::try_update(window, cx, |state, _, _| {
+            state.context_menu_claim.opened = true;
+        });
+    }
+
+    pub(crate) fn clear_context_menu_opened(window: &mut Window, cx: &mut App) {
+        Self::try_update(window, cx, |state, _, _| {
+            state.context_menu_claim.opened = false;
+        });
+    }
+
+    fn reset_context_menu_claim(window: &mut Window, cx: &mut App) {
+        Self::try_update(window, cx, |state, _, _| {
+            state.context_menu_claim = ContextMenuClaim::default();
+        });
+    }
+
+    fn disarm_context_menu_claim(window: &mut Window, cx: &mut App) {
+        Self::try_update(window, cx, |state, _, _| {
+            state.context_menu_claim.armed = false;
+        });
+    }
+
+    pub(crate) fn consume_context_menu_claim(window: &mut Window, cx: &mut App) -> bool {
+        Self::try_update(window, cx, |state, _, _| {
+            // Preserve `input_gesture` for platforms where `contextmenu` fires
+            // before `pointerup` so the release can still open the input menu.
+            let armed = std::mem::take(&mut state.context_menu_claim.armed);
+            let opened = std::mem::take(&mut state.context_menu_claim.opened);
+            armed || opened
+        })
+        .unwrap_or(false)
+    }
 }
 impl gpui_base::RootPlugin for WindowState {
     fn prepare(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -162,6 +220,36 @@ impl gpui_base::RootPlugin for WindowState {
                 .bg(cx.theme().tokens.background)
                 .text_color(cx.theme().foreground),
         );
+    }
+    fn decorate(
+        &self,
+        surface: AnyElement,
+        _: &gpui_base::Root,
+        _: &mut Window,
+        _: &mut App,
+    ) -> impl IntoElement {
+        div()
+            .relative()
+            .size_full()
+            .capture_key_down(|_, window, cx| {
+                Self::reset_context_menu_claim(window, cx);
+            })
+            .child(div().absolute().size_0().child(canvas(
+                |_, _, _| {},
+                |_, _, window, _| {
+                    window.on_mouse_event(|_: &MouseDownEvent, phase, window, cx| {
+                        if phase == DispatchPhase::Capture {
+                            Self::reset_context_menu_claim(window, cx);
+                        }
+                    });
+                    window.on_mouse_event(|event: &MouseUpEvent, phase, window, cx| {
+                        if phase == DispatchPhase::Capture && event.button == MouseButton::Right {
+                            Self::disarm_context_menu_claim(window, cx);
+                        }
+                    });
+                },
+            )))
+            .child(surface)
     }
 }
 impl Render for WindowState {

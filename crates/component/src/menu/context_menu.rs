@@ -475,6 +475,10 @@ fn open_menu(
                 input.set_selection_focus(Some(menu.focus_handle(cx)), cx);
             }
 
+            if !menu.read(cx).is_empty() {
+                WindowState::mark_context_menu_opened(window, cx);
+            }
+
             // Focus before the menu's first frame, not while prepainting it:
             // a frame reports one focused accessibility node, and the element
             // that held focus may already have claimed it by then.
@@ -488,7 +492,8 @@ fn open_menu(
             // closes leaks its PopupMenu entity.
             let _subscription = window.subscribe(&menu, cx, {
                 let shared_state = Rc::downgrade(&shared_state);
-                move |_, _: &DismissEvent, window, _cx| {
+                move |_, _: &DismissEvent, window, cx| {
+                    WindowState::clear_context_menu_opened(window, cx);
                     if let Some(shared_state) = shared_state.upgrade() {
                         let mut state = shared_state.borrow_mut();
                         state.open = false;

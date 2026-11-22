@@ -953,6 +953,25 @@ pub fn open_search() {
     });
 }
 
+#[wasm_bindgen]
+pub fn consume_custom_context_menu() -> bool {
+    APPLICATION.with(|application| {
+        let application = application.borrow();
+        let Some(handle) = application.as_ref() else {
+            return false;
+        };
+        handle.update(|cx| {
+            let Some(window) = cx.windows().into_iter().next() else {
+                return false;
+            };
+            cx.update_window(window, |_, window, cx| {
+                gpui_kit::component::context_menu::consume_custom_context_menu(window, cx)
+            })
+            .unwrap_or(false)
+        })
+    })
+}
+
 // CSS is the source of truth; this only updates GPUI's render snapshot.
 #[wasm_bindgen]
 pub fn set_color_scheme(dark: bool, overridden: bool) {

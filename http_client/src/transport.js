@@ -1,10 +1,7 @@
 export function prepareRequestBody(format, text, binaryFile) {
   if (format === 'no_body') return undefined;
   if (format === 'text') return text;
-  if (format === 'binary') {
-    if (!binaryFile) throw new Error('Choose a file for the binary request body');
-    return binaryFile;
-  }
+  if (format === 'binary') return binaryFile ?? new Blob([]);
   const entries = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;

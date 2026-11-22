@@ -14,12 +14,12 @@ use gpui_kit::{
     AnyElement, App, AppContext as _, ClipboardItem, Context, CursorStyle, Entity, FocusHandle,
     InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, ParentElement as _, Pixels,
     Render, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    Task, WeakEntity, Window, accesskit::Role, anchored, canvas, deferred, div, point, px, rems,
+    Task, WeakEntity, Window, accesskit::Role, canvas, div, rems,
 };
 
 use crate::{
     DETAIL_PANE_MAX_WIDTH_REMS,
-    buttons::{action_button, field_button, field_button_icon},
+    buttons::{action_button, field_button, field_button_icon, modal_overlay, small_icon},
 };
 
 const CONTEXT: &str = "ResponseHeaders";
@@ -385,85 +385,67 @@ impl ResponseHeaders {
     fn value_dialog(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (name, value) = self.modal_value.as_ref()?;
         let viewport = window.viewport_size();
-        let backdrop = div()
-            .id("header-value-backdrop")
-            .w(viewport.width)
-            .h(viewport.height)
+        let dialog = div()
+            .id("header-value-dialog")
+            .role(Role::Dialog)
+            .aria_label(format!("{name} header value"))
+            .key_context(CONTEXT)
+            .capture_action(|_: &Copy, window, cx| copy_selection(window, cx))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    this.close_value(window, cx);
+                }
+            }))
+            .w(rems(36.0))
+            .max_w(viewport.width * 0.9)
             .flex()
-            .items_center()
-            .justify_center()
-            .occlude()
-            .bg(cx.theme().muted.opacity(0.75))
+            .flex_col()
+            .gap_2()
+            .p_4()
+            .bg(cx.theme().popover)
+            .text_color(cx.theme().popover_foreground)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded(cx.theme().radius)
             .child(
                 div()
-                    .id("header-value-dialog")
-                    .role(Role::Dialog)
-                    .aria_label(format!("{name} header value"))
-                    .key_context(CONTEXT)
-                    .track_focus(&self.modal_focus)
-                    .capture_action(|_: &Copy, window, cx| copy_selection(window, cx))
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                        if event.keystroke.key == "escape" {
-                            window.prevent_default();
-                            cx.stop_propagation();
-                            this.close_value(window, cx);
-                        }
-                    }))
-                    .w(rems(36.0))
-                    .max_w(viewport.width * 0.9)
                     .flex()
-                    .flex_col()
+                    .items_center()
+                    .justify_between()
                     .gap_2()
-                    .p_4()
-                    .bg(cx.theme().popover)
-                    .text_color(cx.theme().popover_foreground)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded(cx.theme().radius)
+                    .child(div().min_w_0().truncate().child(name.clone()))
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(div().min_w_0().truncate().child(name.clone()))
-                            .child(
-                                action_button("close-header-value", cx)
-                                    .with_size(Size::Small)
-                                    .accessibility_label("Close header value")
-                                    .child(field_button_icon(
-                                        include_bytes!("../../../assets/icons/close.svg"),
-                                        rems(0.875),
-                                        cx.theme().popover_foreground,
-                                        false,
-                                    ))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.close_value(window, cx)
-                                    })),
+                        action_button("close-header-value", cx)
+                            .with_size(Size::Small)
+                            .accessibility_label("Close header value")
+                            .icon(small_icon(
+                                include_bytes!("../../../assets/icons/close.svg"),
+                                cx.theme().popover_foreground,
+                            ))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.close_value(window, cx)),
                             ),
-                    )
+                    ),
+            )
+            .child(
+                div()
+                    .id("header-value-scroll")
+                    .w_full()
+                    .max_h(viewport.height * 0.65)
+                    .overflow_y_scroll()
+                    .cursor(CursorStyle::IBeam)
+                    .whitespace_normal()
+                    .font_family(cx.theme().mono_font_family.clone())
+                    .text_size(rems(VALUE_FONT_SIZE_REMS))
                     .child(
-                        div()
-                            .id("header-value-scroll")
-                            .w_full()
-                            .max_h(viewport.height * 0.65)
-                            .overflow_y_scroll()
-                            .cursor(CursorStyle::IBeam)
-                            .whitespace_normal()
-                            .font_family(cx.theme().mono_font_family.clone())
-                            .text_size(rems(VALUE_FONT_SIZE_REMS))
-                            .child(
-                                SelectableText::new("full-header-value-text", value.clone())
-                                    .selection_color(cx.theme().selection),
-                            ),
-                    )
-                    .focus_trap("header-value-focus-trap", &self.modal_focus),
-            );
-        Some(
-            deferred(anchored().position(point(px(0.), px(0.))).child(backdrop))
-                .with_priority(2)
-                .into_any_element(),
-        )
+                        SelectableText::new("full-header-value-text", value.clone())
+                            .selection_color(cx.theme().selection),
+                    ),
+            )
+            .focus_trap("header-value-focus-trap", &self.modal_focus);
+        Some(modal_overlay("header-value-backdrop", dialog, window, cx))
     }
 }
 

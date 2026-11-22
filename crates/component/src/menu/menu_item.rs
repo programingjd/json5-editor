@@ -132,9 +132,6 @@ impl RenderOnce for MenuItemElement {
                         .on_click(on_click)
                     })
             })
-            .when(self.disabled, |this| {
-                this.text_color(cx.theme().muted_foreground)
-            })
             .children(self.children)
     }
 }

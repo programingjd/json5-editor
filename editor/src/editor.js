@@ -7,7 +7,9 @@ import './processing-indicators.css';
 import { mountEditorShell } from './editor-shell.js';
 import './editor-shell.css';
 import { readColorScheme, toggleColorSchemeOverride, observeColorScheme } from './color-scheme.js';
-import { installSearchShortcut, preserveHistoryMouseButtons } from './browser-shortcuts.js';
+import {
+  installSearchShortcut, preserveHistoryMouseButtons, preserveNativeContextMenu,
+} from './browser-shortcuts.js';
 
 export function reportEditorError(error) {
   console.error('JSON5 editor:', error);
@@ -113,16 +115,25 @@ export async function startEditor({ initialDocument = null } = {}) {
     documents.openFile(file);
   });
 
+  const stopPreservingContextMenu = preserveNativeContextMenu(
+    () => wasm.consume_custom_context_menu(),
+  );
   const { dark, overridden } = readColorScheme();
-  await wasm.run(dark, overridden, fonts.inter, fonts.mono, fonts.interItalic,
-    new URL(sbomUrl, window.location.href).href,
-    new URL('./NOTICE', window.location.href).href);
+  try {
+    await wasm.run(dark, overridden, fonts.inter, fonts.mono, fonts.interItalic,
+      new URL(sbomUrl, window.location.href).href,
+      new URL('./NOTICE', window.location.href).href);
+  } catch (error) {
+    stopPreservingContextMenu();
+    throw error;
+  }
   const stopObserving = observeColorScheme(({ dark, overridden }) => wasm.set_color_scheme(dark, overridden));
   window.addEventListener('pagehide', event => {
     if (!event.persisted) {
       stopObserving();
       stopSearchShortcut();
       stopPreservingHistoryMouseButtons();
+      stopPreservingContextMenu();
     }
   });
 }

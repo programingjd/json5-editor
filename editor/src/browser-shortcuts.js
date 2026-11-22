@@ -33,3 +33,34 @@ export function preserveHistoryMouseButtons() {
     window.removeEventListener('pointerup', leaveToBrowser, options);
   };
 }
+
+export function preserveNativeContextMenu(consumeCustomContextMenu) {
+  let touchContextMenu = false;
+  const onPointerDown = event => {
+    touchContextMenu = event.target instanceof HTMLCanvasElement && event.pointerType === 'touch';
+  };
+  const onKeyDown = () => {
+    touchContextMenu = false;
+  };
+  const onContextMenu = event => {
+    if (!(event.target instanceof HTMLCanvasElement)) return;
+    if (event.pointerType === 'touch'
+        || (event.pointerType === undefined && event.button !== 2 && touchContextMenu)) {
+      return;
+    }
+    if (event.button === 2 && consumeCustomContextMenu()) return;
+    // GPUI cancels contextmenu on the canvas unconditionally. Stop the event
+    // before it reaches the canvas listener so the browser's native menu opens.
+    event.stopPropagation();
+  };
+  const capture = { capture: true };
+  const passiveCapture = { capture: true, passive: true };
+  window.addEventListener('pointerdown', onPointerDown, passiveCapture);
+  window.addEventListener('keydown', onKeyDown, passiveCapture);
+  window.addEventListener('contextmenu', onContextMenu, capture);
+  return () => {
+    window.removeEventListener('pointerdown', onPointerDown, passiveCapture);
+    window.removeEventListener('keydown', onKeyDown, passiveCapture);
+    window.removeEventListener('contextmenu', onContextMenu, capture);
+  };
+}

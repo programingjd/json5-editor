@@ -13,6 +13,8 @@ test('text, binary, and absent bodies keep their transport types', () => {
   const binary = new File([new Uint8Array([0, 255])], 'data.bin');
   assert.equal(prepareRequestBody('text', '  plain text\n'), '  plain text\n');
   assert.equal(prepareRequestBody('binary', '', binary), binary);
-  assert.throws(() => prepareRequestBody('binary', ''), /Choose a file/);
+  const emptyBinary = prepareRequestBody('binary', '');
+  assert.ok(emptyBinary instanceof Blob);
+  assert.equal(emptyBinary.size, 0);
   assert.equal(prepareRequestBody('no_body', 'retained draft', binary), undefined);
 });

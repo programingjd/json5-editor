@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -27,10 +27,12 @@ export async function createEditorConfig(rootUrl, {
   const iconsPath = asset('assets/icons');
   const componentIcons = readFileSync(asset('crates/assets/default-icons.txt'), 'utf8')
     .trim().split(/\r?\n/).map(file => path.posix.basename(file));
+  const favicon = path.join(appRoot, 'favicon.ico');
   const pageAssets = [
-    ['initial-theme.js', initialTheme],
-    ['LICENSE-APACHE', asset('LICENSE-APACHE')],
-    ['NOTICE', asset('NOTICE')],
+    ['initial-theme.js', initialTheme, 'text/javascript'],
+    ['LICENSE-APACHE', asset('LICENSE-APACHE'), 'text/plain; charset=utf-8'],
+    ['NOTICE', asset('NOTICE'), 'text/plain; charset=utf-8'],
+    ...(existsSync(favicon) ? [['favicon.ico', favicon, 'image/x-icon']] : []),
   ];
 
   return {
@@ -45,9 +47,9 @@ export async function createEditorConfig(rootUrl, {
       {
         name: 'editor-page-assets',
         configureServer(server) {
-          for (const [fileName, source] of pageAssets) {
+          for (const [fileName, source, contentType] of pageAssets) {
             server.middlewares.use(`/${fileName}`, (_, response) => {
-              response.setHeader('Content-Type', fileName.endsWith('.js') ? 'text/javascript' : 'text/plain; charset=utf-8');
+              response.setHeader('Content-Type', contentType);
               response.end(readFileSync(source));
             });
           }

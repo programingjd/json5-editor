@@ -1159,14 +1159,18 @@ impl PopupMenu {
                 .border_b(px(2.))
                 .border_color(cx.theme().border)
                 .disabled(true),
-            PopupMenuItem::Label(label) => this.disabled(true).cursor_default().child(
-                h_flex()
-                    .cursor_default()
-                    .items_center()
-                    .gap_x_1()
-                    .children(Self::render_icon(has_left_icon, false, None, window, cx))
-                    .child(div().flex_1().child(label.clone())),
-            ),
+            PopupMenuItem::Label(label) => this
+                .disabled(true)
+                .text_color(cx.theme().muted_foreground)
+                .cursor_default()
+                .child(
+                    h_flex()
+                        .cursor_default()
+                        .items_center()
+                        .gap_x_1()
+                        .children(Self::render_icon(has_left_icon, false, None, window, cx))
+                        .child(div().flex_1().child(label.clone())),
+                ),
             PopupMenuItem::ElementItem {
                 render,
                 icon,
@@ -1179,6 +1183,7 @@ impl PopupMenu {
                     )
                 })
                 .disabled(*disabled)
+                .when(*disabled, |this| this.opacity(0.5))
                 .child(
                     h_flex()
                         .flex_1()
@@ -1213,6 +1218,7 @@ impl PopupMenu {
                     )
                 })
                 .disabled(*disabled)
+                .when(*disabled, |this| this.opacity(0.5))
                 .h(item_height)
                 .gap_x_1()
                 .children(Self::render_icon(
@@ -1255,6 +1261,7 @@ impl PopupMenu {
             } => this
                 .selected(selected)
                 .disabled(*disabled)
+                .when(*disabled, |this| this.opacity(0.5))
                 .items_start()
                 .child(
                     h_flex()
