@@ -358,6 +358,10 @@ impl ResponseHeaders {
         }
     }
 
+    pub(super) fn has_modal_open(&self) -> bool {
+        self.modal_value.is_some()
+    }
+
     fn open_value(
         &mut self,
         name: SharedString,

@@ -1,12 +1,14 @@
 use std::{
     cell::{Cell, RefCell},
+    ops::Range,
     rc::Rc,
     time::Duration,
 };
 
 use gpui_kit::base::{
-    MotionStatus, StyledExt as _, Transition,
-    input::{Enter, InputEvent, InputPreparation},
+    MotionStatus, StyledExt as _, TextSelection, TextSelectionHandle, TextSelectionRegistration,
+    TextSelectionRun, Transition,
+    input::{Copy, Enter, InputEvent, InputPreparation},
     transition_with_status,
 };
 use gpui_kit::component::{
@@ -19,12 +21,14 @@ use gpui_kit::component::{
     tooltip::Tooltip,
 };
 use gpui_kit::{
-    Anchor, AnyElement, App, AppContext as _, Context, CursorStyle, DispatchPhase, Div,
-    DragMoveEvent, ElementId, EmptyView, Entity, FocusHandle, Focusable as _,
-    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseMoveEvent,
-    MouseUpEvent, ParentElement as _, Pixels, Point, Render, ScrollHandle, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, TextStyleRefinement, Window,
-    accesskit::Role, canvas, deferred, div, prelude::FluentBuilder as _, px, relative, rems,
+    Anchor, AnyElement, App, AppContext as _, BorderStyle, Bounds, ClipboardItem, Context, Corners,
+    CursorStyle, DispatchPhase, Div, DragMoveEvent, Edges, Element, ElementId, EmptyView, Entity,
+    FocusHandle, Focusable as _, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, LayoutId, MouseButton,
+    MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement as _, Pixels, Point, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
+    Subscription, TextLayout, TextStyleRefinement, Window, accesskit::Role, canvas, deferred, div,
+    prelude::FluentBuilder as _, px, relative, rems, transparent_black,
 };
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
@@ -54,6 +58,7 @@ const RESPONSE_TABS: &[&str] = &["Response", "Headers", "Cookies", "Timeline"];
 const DEFAULT_REQUEST_FRACTION: f32 = 0.515;
 const MIN_PANE_FRACTION: f32 = 0.2;
 const REQUEST_PANE_CONTEXT: &str = "HttpRequestPane";
+const TIMELINE_CONTEXT: &str = "ResponseTimeline";
 
 gpui_kit::actions!(http_client, [SendRequest]);
 
@@ -62,6 +67,8 @@ pub(super) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-enter", SendRequest, Some(REQUEST_PANE_CONTEXT)),
         // Match at input depth too so the editor's secondary Enter binding cannot win.
         KeyBinding::new("ctrl-enter", SendRequest, Some("HttpRequestPane > Input")),
+        KeyBinding::new("ctrl-c", Copy, Some(TIMELINE_CONTEXT)),
+        KeyBinding::new("cmd-c", Copy, Some(TIMELINE_CONTEXT)),
     ]);
 }
 
@@ -156,7 +163,7 @@ enum ResponseFormat {
     Binary,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum TimelineSide {
     Request,
@@ -168,6 +175,303 @@ pub(super) struct TimelineEvent {
     label: String,
     elapsed_ms: f64,
     side: TimelineSide,
+}
+
+#[derive(Clone)]
+struct TimelineCellSelection {
+    handle: TextSelectionHandle,
+    fallback: SharedString,
+    last_run: Rc<RefCell<Option<TextSelectionRun>>>,
+}
+
+impl TimelineCellSelection {
+    fn new(text: impl Into<SharedString>, focus: &FocusHandle, cx: &mut App) -> Self {
+        let fallback: SharedString = text.into();
+        let handle = TextSelectionHandle::new(fallback.to_string(), cx);
+        let focus = focus.clone();
+        handle.focus_with(move |window, cx| focus.focus(window, cx), cx);
+        Self {
+            handle,
+            fallback,
+            last_run: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    fn selected_text(&self, cx: &mut App) -> Option<String> {
+        self.handle.snapshot(cx)?;
+        let text = if let Some(run) = self.last_run.borrow().clone() {
+            let projection = self.handle.update_runs(std::slice::from_ref(&run), cx);
+            let range = projection.ranges().first()?.as_ref()?;
+            run.text().get(range.clone())?.to_owned()
+        } else {
+            self.fallback.to_string()
+        };
+        (!text.is_empty()).then_some(text)
+    }
+}
+
+fn paint_selection_quads(
+    layout: &TextLayout,
+    range: Range<usize>,
+    color: Hsla,
+    window: &mut Window,
+) {
+    let (Some(start), Some(end)) = (
+        layout.position_for_index(range.start),
+        layout.position_for_index(range.end),
+    ) else {
+        return;
+    };
+    let bounds = layout.bounds();
+    let line_height = layout.line_height();
+    let quads = if start.y == end.y {
+        vec![Bounds::from_corners(
+            start,
+            Point::new(end.x, end.y + line_height),
+        )]
+    } else {
+        let mut quads = vec![Bounds::from_corners(
+            start,
+            Point::new(bounds.right(), start.y + line_height),
+        )];
+        if end.y > start.y + line_height {
+            quads.push(Bounds::from_corners(
+                Point::new(bounds.left(), start.y + line_height),
+                Point::new(bounds.right(), end.y),
+            ));
+        }
+        quads.push(Bounds::from_corners(
+            Point::new(bounds.left(), end.y),
+            Point::new(end.x, end.y + line_height),
+        ));
+        quads
+    };
+    for bounds in quads {
+        window.paint_quad(PaintQuad {
+            bounds,
+            background: color.into(),
+            corner_radii: Corners::default(),
+            border_widths: Edges::default(),
+            border_color: transparent_black(),
+            border_style: BorderStyle::default(),
+        });
+    }
+}
+
+struct TimelineCell {
+    id: ElementId,
+    cell: TimelineCellSelection,
+    styled_text: StyledText,
+    document_order: u64,
+    selection_color: Hsla,
+}
+
+impl IntoElement for TimelineCell {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for TimelineCell {
+    type RequestLayoutState = ();
+    type PrepaintState = Hitbox;
+
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.clone())
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        self.styled_text
+            .request_layout(global_id, inspector_id, window, cx)
+    }
+
+    fn prepaint(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.styled_text
+            .prepaint(global_id, inspector_id, bounds, &mut (), window, cx);
+        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+        let registration = TextSelectionRegistration::new(hitbox.clone(), bounds)
+            .with_document_order(self.document_order)
+            .with_text_bounds(vec![bounds])
+            .with_rendered_element(&self.cell.handle, window, cx);
+        self.cell.handle.register(registration, window, cx);
+        hitbox
+    }
+
+    fn paint(
+        &mut self,
+        global_id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let layout = self.styled_text.layout().clone();
+        let run = TextSelectionRun::new(self.cell.fallback.clone(), layout.clone(), bounds)
+            .with_document_order(self.document_order);
+        *self.cell.last_run.borrow_mut() = Some(run.clone());
+        let selected_text_before = TextSelection::selected_text(window, cx);
+        let projection = self.cell.handle.update_runs(&[run], cx);
+        if selected_text_before != TextSelection::selected_text(window, cx) {
+            window.refresh();
+        }
+        for range in projection.ranges().iter().flatten().cloned() {
+            paint_selection_quads(&layout, range, self.selection_color, window);
+        }
+        self.styled_text.paint(
+            global_id,
+            inspector_id,
+            bounds,
+            &mut (),
+            &mut (),
+            window,
+            cx,
+        );
+    }
+}
+
+struct TimelineRowHandles {
+    label: TimelineCellSelection,
+    time: TimelineCellSelection,
+    cumulative: TimelineCellSelection,
+}
+
+impl TimelineRowHandles {
+    fn new(label: &str, time: &str, cumulative: &str, focus: &FocusHandle, cx: &mut App) -> Self {
+        let [label, time, cumulative] = [label, time, cumulative]
+            .map(|text| TimelineCellSelection::new(text.to_owned(), focus, cx));
+        Self {
+            label,
+            time,
+            cumulative,
+        }
+    }
+
+    fn cell(
+        id: impl Into<ElementId>,
+        cell: &TimelineCellSelection,
+        order: u64,
+        cx: &App,
+    ) -> TimelineCell {
+        TimelineCell {
+            id: id.into(),
+            styled_text: StyledText::new(cell.fallback.clone()),
+            cell: cell.clone(),
+            document_order: order,
+            selection_color: cx.theme().selection,
+        }
+    }
+
+    fn selected_row_text(&self, cx: &mut App) -> Option<String> {
+        let cells = [&self.label, &self.time, &self.cumulative]
+            .into_iter()
+            .filter_map(|cell| cell.selected_text(cx))
+            .collect::<Vec<_>>();
+        (!cells.is_empty()).then(|| cells.join("\t"))
+    }
+}
+
+struct TimelineRowData {
+    side: TimelineSide,
+    handles: TimelineRowHandles,
+}
+
+struct ResponseTimeline {
+    focus: FocusHandle,
+    scroll: ScrollHandle,
+    header: TimelineRowHandles,
+    rows: Vec<TimelineRowData>,
+    total: Option<TimelineRowHandles>,
+}
+
+impl ResponseTimeline {
+    fn new(cx: &mut App) -> Self {
+        let focus = cx.focus_handle();
+        let header =
+            TimelineRowHandles::new("Event", "Time (ms)", "Cumulative time (ms)", &focus, cx);
+        Self {
+            focus,
+            scroll: ScrollHandle::new(),
+            header,
+            rows: Vec::new(),
+            total: None,
+        }
+    }
+
+    fn set_events(
+        &mut self,
+        events: &[TimelineEvent],
+        reset_scroll: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.clear_selection_if_focused(window, cx);
+        let mut previous = 0.0;
+        let mut total = 0.0;
+        self.rows = events
+            .iter()
+            .map(|event| {
+                let delta = (event.elapsed_ms - previous).max(0.0);
+                previous = event.elapsed_ms;
+                total += delta;
+                let time = format!("{delta:.2}");
+                let cumulative = format!("{:.2}", event.elapsed_ms);
+                let handles =
+                    TimelineRowHandles::new(&event.label, &time, &cumulative, &self.focus, cx);
+                TimelineRowData {
+                    side: event.side,
+                    handles,
+                }
+            })
+            .collect();
+        self.total = (!events.is_empty()).then(|| {
+            let time = format!("{total:.2}");
+            let cumulative = format!("{previous:.2}");
+            TimelineRowHandles::new("Total", &time, &cumulative, &self.focus, cx)
+        });
+        if reset_scroll {
+            self.scroll.set_offset(Point::default());
+        }
+    }
+
+    fn selected_text(&self, window: &mut Window, cx: &mut App) -> String {
+        if !self.focus.is_focused(window) {
+            return String::new();
+        }
+        std::iter::once(&self.header)
+            .chain(self.rows.iter().map(|row| &row.handles))
+            .chain(self.total.as_ref())
+            .filter_map(|row| row.selected_row_text(cx))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn clear_selection_if_focused(&self, window: &mut Window, cx: &mut App) {
+        if self.focus.is_focused(window) {
+            TextSelection::clear(window, cx);
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -278,6 +582,9 @@ pub(super) struct HttpClient {
     multipart_body: Entity<TextareaState>,
     text_body: Entity<TextareaState>,
     binary_file: Option<(SharedString, SharedString)>,
+    binary_focus: FocusHandle,
+    binary_drop_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    binary_drag_over: bool,
     pick_binary: Function,
     clear_binary: Function,
     params: Entity<RequestFields>,
@@ -294,7 +601,7 @@ pub(super) struct HttpClient {
     download_response: Function,
     response: Option<Response>,
     error_timeline: Vec<TimelineEvent>,
-    timeline_scroll: ScrollHandle,
+    timeline: ResponseTimeline,
     response_loading: bool,
     request_loading: bool,
     request_tab: RequestTab,
@@ -395,6 +702,9 @@ impl HttpClient {
             multipart_body: cx.new(|cx| TextareaState::new(window, cx).placeholder("name=value")),
             text_body: cx.new(|cx| TextareaState::new(window, cx)),
             binary_file: None,
+            binary_focus: cx.focus_handle(),
+            binary_drop_bounds: Rc::default(),
+            binary_drag_over: false,
             pick_binary: callbacks.pick_binary.clone(),
             clear_binary: callbacks.clear_binary.clone(),
             params,
@@ -413,7 +723,7 @@ impl HttpClient {
             download_response: callbacks.download_response.clone(),
             response: None,
             error_timeline: Vec::new(),
-            timeline_scroll: ScrollHandle::new(),
+            timeline: ResponseTimeline::new(cx),
             response_loading: false,
             request_loading: true,
             request_tab: RequestTab::Body,
@@ -494,6 +804,7 @@ impl HttpClient {
             .get(..7)
             .filter(|scheme| scheme.eq_ignore_ascii_case("http://"))
             .map(|_| request.url.clone());
+        let had_error = self.error.is_some();
         self.error = None;
         self.error_timeline.clear();
         self.pending = true;
@@ -511,6 +822,9 @@ impl HttpClient {
             self.pending = false;
             self.sent_http_url = None;
             self.error = Some("Could not send request".into());
+        }
+        if had_error || self.error.is_some() {
+            self.sync_timeline(true, window, cx);
         }
         cx.notify();
     }
@@ -545,11 +859,37 @@ impl HttpClient {
 
     pub(super) fn set_binary_file(&mut self, name: String, size: u64, cx: &mut Context<Self>) {
         self.binary_file = Some((name.into(), format_byte_size(size).into()));
+        self.binary_drag_over = false;
         cx.notify();
     }
 
-    fn clear_binary_file(&mut self, cx: &mut Context<Self>) {
+    fn set_binary_drag_over(&mut self, active: bool, cx: &mut Context<Self>) {
+        if self.binary_drag_over != active {
+            self.binary_drag_over = active;
+            cx.notify();
+        }
+    }
+
+    fn accepts_binary_drop(&self, position: Point<Pixels>, cx: &App) -> bool {
+        self.request_tab == RequestTab::Body
+            && self.body_format == BodyFormat::Binary
+            && !self.response_headers.read(cx).has_modal_open()
+            && self
+                .binary_drop_bounds
+                .get()
+                .is_some_and(|bounds| bounds.contains(&position))
+    }
+
+    fn accepts_binary_paste(&self, window: &Window, cx: &App) -> bool {
+        self.request_tab == RequestTab::Body
+            && self.body_format == BodyFormat::Binary
+            && !self.response_headers.read(cx).has_modal_open()
+            && self.binary_focus.contains_focused(window, cx)
+    }
+
+    fn clear_binary_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.binary_file = None;
+        self.binary_focus.focus(window, cx);
         let _ = self
             .clear_binary
             .call1(&JsValue::UNDEFINED, &JsValue::from(self.tab_id));
@@ -562,10 +902,22 @@ impl HttpClient {
         cx.notify();
     }
 
+    fn sync_timeline(&mut self, reset_scroll: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let events = if self.error.is_some() {
+            &self.error_timeline[..]
+        } else {
+            self.response
+                .as_ref()
+                .map_or(&[][..], |response| &response.timeline)
+        };
+        self.timeline.set_events(events, reset_scroll, window, cx);
+    }
+
     pub(super) fn finish_request_error(
         &mut self,
         error: String,
         timeline: Vec<TimelineEvent>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.pending = false;
@@ -573,7 +925,7 @@ impl HttpClient {
         self.sent_http_url = None;
         self.error = Some(error);
         self.error_timeline = timeline;
-        self.timeline_scroll.set_offset(Point::default());
+        self.sync_timeline(true, window, cx);
         cx.notify();
     }
 
@@ -723,7 +1075,7 @@ impl HttpClient {
             headers.set_headers(&response.headers, window, cx)
         });
         self.response = Some(response);
-        self.timeline_scroll.set_offset(Point::default());
+        self.sync_timeline(true, window, cx);
         self.pending = false;
         self.response_loading = false;
         cx.notify();
@@ -892,9 +1244,12 @@ impl HttpClient {
                             row.children(RESPONSE_TABS.iter().enumerate().map(|(index, &label)| {
                                 segment_button((id, index), self.response_tab == index, cx)
                                     .label(label)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.response_tab = index;
-                                        cx.notify();
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        if this.response_tab != index {
+                                            this.timeline.clear_selection_if_focused(window, cx);
+                                            this.response_tab = index;
+                                            cx.notify();
+                                        }
                                     }))
                             }))
                         } else {
@@ -964,8 +1319,11 @@ impl HttpClient {
             );
         if !selected {
             return button
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(|this, _, window, cx| {
                     this.request_tab = RequestTab::Body;
+                    if this.body_format == BodyFormat::Binary {
+                        this.binary_focus.focus(window, cx);
+                    }
                     cx.notify();
                 }))
                 .into_any_element();
@@ -981,9 +1339,16 @@ impl HttpClient {
                             let _ = owner.update(cx, |this, cx| {
                                 if this.body_format != option {
                                     this.body_format = option;
+                                    this.binary_drag_over = false;
                                     this.headers.update(cx, |headers, cx| {
                                         headers.set_content_type(option.content_type(), window, cx);
                                     });
+                                    if option == BodyFormat::Binary {
+                                        let focus = this.binary_focus.clone();
+                                        window.on_next_frame(move |window, cx| {
+                                            focus.focus(window, cx)
+                                        });
+                                    }
                                     cx.notify();
                                 }
                             });
@@ -1066,7 +1431,10 @@ impl HttpClient {
                 .into_any_element(),
             BodyFormat::Binary => {
                 let icon_color = cx.theme().muted_foreground;
-                let container = div()
+                let highlight = palette::get(cx).selection;
+                let drop_bounds = self.binary_drop_bounds.clone();
+                let radius = cx.theme().radius;
+                let content = div()
                     .id("binary-body")
                     .size_full()
                     .min_h_0()
@@ -1077,9 +1445,9 @@ impl HttpClient {
                     .flex_col()
                     .items_center()
                     .gap_1();
-                if let Some((name, size)) = self.binary_file.clone() {
+                let content = if let Some((name, size)) = self.binary_file.clone() {
                     let full_name = name.clone();
-                    container
+                    content
                         .child(
                             div()
                                 .id("binary-file-name")
@@ -1101,38 +1469,74 @@ impl HttpClient {
                                     include_bytes!("../../../assets/icons/delete.svg"),
                                     icon_color,
                                 ))
-                                .on_click(cx.listener(|this, _, _, cx| this.clear_binary_file(cx))),
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.clear_binary_file(window, cx)
+                                })),
                         )
-                        .into_any_element()
                 } else {
                     let tab_id = self.tab_id;
                     let pick_binary = self.pick_binary.clone();
-                    container
-                        .child(
-                            action_button("request-binary-file", cx)
-                                .size(rems(3.0))
-                                .p_0()
-                                .tooltip("Choose file")
-                                .accessibility_label("Choose file")
-                                .child(
-                                    Icon::default()
-                                        .data(include_bytes!("../../../assets/icons/open.svg"))
-                                        .size(rems(2.0))
-                                        .text_color(icon_color),
-                                )
-                                .on_click(move |_, _, _| {
-                                    let _ = pick_binary
-                                        .call1(&JsValue::UNDEFINED, &JsValue::from(tab_id));
-                                }),
+                    content.child(
+                        action_button("request-binary-file", cx)
+                            .size(rems(3.0))
+                            .p_0()
+                            .tooltip("Choose, drop, or paste file")
+                            .accessibility_label("Choose file")
+                            .child(
+                                Icon::default()
+                                    .data(include_bytes!("../../../assets/icons/open.svg"))
+                                    .size(rems(2.0))
+                                    .text_color(icon_color),
+                            )
+                            .on_click(move |_, _, _| {
+                                let _ =
+                                    pick_binary.call1(&JsValue::UNDEFINED, &JsValue::from(tab_id));
+                            }),
+                    )
+                };
+                div()
+                    .id("binary-body-frame")
+                    .relative()
+                    .track_focus(&self.binary_focus)
+                    .size_full()
+                    .min_h_0()
+                    .rounded(radius)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            this.binary_focus.focus(window, cx);
+                        }),
+                    )
+                    .child(
+                        canvas(
+                            move |bounds, _, _| {
+                                drop_bounds.set(Some(bounds));
+                            },
+                            |_, _, _, _| {},
                         )
-                        .into_any_element()
-                }
+                        .absolute()
+                        .inset_0(),
+                    )
+                    .when(self.binary_drag_over, |frame| {
+                        frame.child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .rounded(radius)
+                                .border_1()
+                                .border_dashed()
+                                .border_color(highlight)
+                                .bg(highlight.opacity(0.12)),
+                        )
+                    })
+                    .child(content)
+                    .into_any_element()
             }
             _ => div().into_any_element(),
         }
     }
 
-    fn response_content(&self, cx: &App) -> AnyElement {
+    fn response_content(&self, cx: &mut Context<Self>) -> AnyElement {
         match self.response_tab {
             0 => match self
                 .response
@@ -1178,34 +1582,55 @@ impl HttpClient {
         }
     }
 
-    fn response_timeline(&self, cx: &App) -> impl IntoElement + use<> {
-        let events = if self.error.is_some() {
-            &self.error_timeline[..]
-        } else {
-            self.response
-                .as_ref()
-                .map_or(&[][..], |response| &response.timeline)
-        };
+    fn response_timeline(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let mono = cx.theme().mono_font_family.clone();
         let label_font = cx.theme().font_family.clone();
         let (request_foreground, response_foreground) = timeline_foregrounds();
         let summary_foreground = cx.theme().foreground.opacity(0.5);
         let separator = cx.theme().border.opacity(0.5);
-        let mut previous = 0.0;
-        let mut total = 0.0;
         div()
+            .id("response-timeline-pane")
+            .key_context(TIMELINE_CONTEXT)
+            .track_focus(&self.timeline.focus)
+            .on_action(cx.listener(|this, _: &Copy, window, cx| {
+                let text = this.timeline.selected_text(window, cx);
+                if text.is_empty() {
+                    cx.propagate();
+                    return;
+                }
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+            }))
             .size_full()
             .min_h_0()
             .flex()
             .flex_col()
             .text_sm()
             .child(
-                timeline_row(div().child("Event"), "Time (ms)", "Cumulative time (ms)")
-                    .py_1()
-                    .text_xs()
-                    .border_b_1()
-                    .border_color(separator)
-                    .text_color(summary_foreground),
+                timeline_row(
+                    div().child(TimelineRowHandles::cell(
+                        "timeline-header-event",
+                        &self.timeline.header.label,
+                        0,
+                        cx,
+                    )),
+                    TimelineRowHandles::cell(
+                        "timeline-header-time",
+                        &self.timeline.header.time,
+                        1,
+                        cx,
+                    ),
+                    TimelineRowHandles::cell(
+                        "timeline-header-cumulative",
+                        &self.timeline.header.cumulative,
+                        2,
+                        cx,
+                    ),
+                )
+                .py_1()
+                .text_xs()
+                .border_b_1()
+                .border_color(separator)
+                .text_color(summary_foreground),
             )
             .child(
                 div()
@@ -1219,38 +1644,65 @@ impl HttpClient {
                             .id("response-timeline")
                             .flex_1()
                             .min_h_0()
-                            .track_scroll(&self.timeline_scroll)
+                            .track_scroll(&self.timeline.scroll)
                             .overflow_y_scroll()
                             .flex()
                             .flex_col()
-                            .children(events.iter().map(|event| {
-                                let delta = (event.elapsed_ms - previous).max(0.0);
-                                previous = event.elapsed_ms;
-                                total += delta;
-                                let foreground = match event.side {
+                            .children(self.timeline.rows.iter().enumerate().map(|(index, row)| {
+                                let order = (index as u64 + 1) * 3;
+                                let foreground = match row.side {
                                     TimelineSide::Request => request_foreground,
                                     TimelineSide::Response => response_foreground,
                                 };
                                 timeline_row(
-                                    div()
-                                        .font_family(label_font.clone())
-                                        .italic()
-                                        .child(event.label.clone()),
-                                    format!("{delta:.2}"),
-                                    format!("{:.2}", event.elapsed_ms),
+                                    div().font_family(label_font.clone()).italic().child(
+                                        TimelineRowHandles::cell(
+                                            ("timeline-event-label", index),
+                                            &row.handles.label,
+                                            order,
+                                            cx,
+                                        ),
+                                    ),
+                                    TimelineRowHandles::cell(
+                                        ("timeline-event-time", index),
+                                        &row.handles.time,
+                                        order + 1,
+                                        cx,
+                                    ),
+                                    TimelineRowHandles::cell(
+                                        ("timeline-event-cumulative", index),
+                                        &row.handles.cumulative,
+                                        order + 2,
+                                        cx,
+                                    ),
                                 )
                                 .text_color(foreground)
                                 .font_family(mono.clone())
                             }))
-                            .when(!events.is_empty(), |list| {
+                            .when_some(self.timeline.total.as_ref(), |list, total| {
+                                let order = (self.timeline.rows.len() as u64 + 1) * 3;
                                 list.child(
                                     timeline_row(
-                                        div()
-                                            .font_family(label_font.clone())
-                                            .text_xs()
-                                            .child("Total"),
-                                        format!("{total:.2}"),
-                                        format!("{previous:.2}"),
+                                        div().font_family(label_font.clone()).text_xs().child(
+                                            TimelineRowHandles::cell(
+                                                "timeline-total-label",
+                                                &total.label,
+                                                order,
+                                                cx,
+                                            ),
+                                        ),
+                                        TimelineRowHandles::cell(
+                                            "timeline-total-time",
+                                            &total.time,
+                                            order + 1,
+                                            cx,
+                                        ),
+                                        TimelineRowHandles::cell(
+                                            "timeline-total-cumulative",
+                                            &total.cumulative,
+                                            order + 2,
+                                            cx,
+                                        ),
                                     )
                                     .mt_1()
                                     .py_1()
@@ -1261,7 +1713,7 @@ impl HttpClient {
                                 )
                             }),
                     )
-                    .vertical_scrollbar(&self.timeline_scroll),
+                    .vertical_scrollbar(&self.timeline.scroll),
             )
     }
 
@@ -1517,18 +1969,49 @@ impl Workspace {
             .map(|tab| tab.client.clone())
     }
 
-    pub(super) fn selected_response_header_text(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> String {
+    pub(super) fn selected_response_text(&self, window: &mut Window, cx: &mut App) -> String {
+        if self.settings_dialog.is_some() {
+            return String::new();
+        }
         let client = self.tab(self.active_tab).expect("Active request tab");
-        let tab = client.read(cx);
-        if tab.response_tab == 1 {
-            let headers = tab.response_headers.clone();
-            headers.update(cx, |headers, cx| headers.selected_text(window, cx))
-        } else {
-            String::new()
+        let (response_tab, headers) = {
+            let tab = client.read(cx);
+            (tab.response_tab, tab.response_headers.clone())
+        };
+        match response_tab {
+            1 => headers.update(cx, |headers, cx| headers.selected_text(window, cx)),
+            3 => client.update(cx, |tab, cx| tab.timeline.selected_text(window, cx)),
+            _ => String::new(),
+        }
+    }
+
+    pub(super) fn binary_drop_tab(&self, position: Point<Pixels>, cx: &App) -> Option<u32> {
+        if self.settings_dialog.is_some() {
+            return None;
+        }
+        let client = self.tab(self.active_tab)?;
+        client
+            .read(cx)
+            .accepts_binary_drop(position, cx)
+            .then_some(self.active_tab)
+    }
+
+    pub(super) fn binary_paste_tab(&self, window: &Window, cx: &App) -> Option<u32> {
+        if self.settings_dialog.is_some() {
+            return None;
+        }
+        let client = self.tab(self.active_tab)?;
+        client
+            .read(cx)
+            .accepts_binary_paste(window, cx)
+            .then_some(self.active_tab)
+    }
+
+    pub(super) fn set_binary_drag_over(&mut self, target: Option<u32>, cx: &mut Context<Self>) {
+        for tab in &self.tabs {
+            let tab_active = target == Some(tab.id);
+            tab.client
+                .update(cx, |client, cx| client.set_binary_drag_over(tab_active, cx));
         }
     }
 
@@ -1683,6 +2166,7 @@ impl Workspace {
                     tab.finish_request_error(
                         format!("Could not initialize request: {error:?}"),
                         Vec::new(),
+                        window,
                         cx,
                     );
                 });
@@ -2027,32 +2511,33 @@ fn detail(name: &str, value: &str) -> impl IntoElement + use<> {
         .child(div().min_w_0().flex_1().child(value.to_owned()))
 }
 
-fn timeline_row(
-    label: Div,
-    time: impl Into<SharedString>,
-    cumulative: impl Into<SharedString>,
-) -> Div {
+fn timeline_row(label: Div, time: impl IntoElement, cumulative: impl IntoElement) -> Div {
     div()
         .flex()
         .flex_none()
         .gap_3()
         .px_3()
         .py_0p5()
+        .cursor(CursorStyle::IBeam)
         .child(label.flex_1().min_w_0())
         .child(
             div()
                 .flex_none()
                 .w_20()
                 .max_w(relative(0.26))
-                .text_right()
-                .child(time.into()),
+                .flex()
+                .justify_end()
+                .text_left()
+                .child(div().min_w_0().child(time)),
         )
         .child(
             div()
                 .flex_none()
                 .w(rems(9.0))
                 .max_w(relative(0.30))
-                .text_right()
-                .child(cumulative.into()),
+                .flex()
+                .justify_end()
+                .text_left()
+                .child(div().min_w_0().child(cumulative)),
         )
 }

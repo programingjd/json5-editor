@@ -224,9 +224,40 @@ pub fn finish_archive(tab_id: u32, error: String) {
 }
 
 #[wasm_bindgen]
-pub fn selected_response_header_text() -> String {
-    update_workspace_in_window(|view, window, cx| view.selected_response_header_text(window, cx))
+pub fn selected_response_text() -> String {
+    update_workspace_in_window(|view, window, cx| view.selected_response_text(window, cx))
         .unwrap_or_default()
+}
+
+#[wasm_bindgen]
+pub fn binary_drop_tab(x: f32, y: f32) -> i32 {
+    let mut tab = -1;
+    let position = gpui_kit::point(gpui_kit::px(x), gpui_kit::px(y));
+    update_app(|cx| {
+        if let Some(view) = cx.try_global::<ClientView>()
+            && let Some(id) = view.0.read(cx).binary_drop_tab(position, cx)
+        {
+            tab = id as i32;
+        }
+    });
+    tab
+}
+
+#[wasm_bindgen]
+pub fn binary_paste_tab() -> i32 {
+    update_workspace_in_window(|view, window, cx| view.binary_paste_tab(window, cx))
+        .flatten()
+        .map_or(-1, |id| id as i32)
+}
+
+#[wasm_bindgen]
+pub fn set_binary_drag_over(tab_id: i32) {
+    let target = u32::try_from(tab_id).ok();
+    update_app(|cx| {
+        if let Some(view) = cx.try_global::<ClientView>().map(|view| view.0.clone()) {
+            view.update(cx, |view, cx| view.set_binary_drag_over(target, cx));
+        }
+    });
 }
 
 #[wasm_bindgen]
@@ -237,8 +268,8 @@ pub fn begin_response(tab_id: u32) {
 #[wasm_bindgen]
 pub fn finish_request_error(tab_id: u32, error: String, timeline: String) {
     let timeline = serde_json::from_str(&timeline).unwrap_or_default();
-    update_view(tab_id, |view, cx| {
-        view.finish_request_error(error, timeline, cx)
+    update_view_in_window(tab_id, |view, window, cx| {
+        view.finish_request_error(error, timeline, window, cx)
     });
 }
 

@@ -7,8 +7,8 @@ use std::{
 };
 
 use gpui::{
-    App, AppContext as _, Bounds, Context, Element, ElementId, Entity, EntityId, EventEmitter,
-    Global, GlobalElementId, Half, Hitbox, HitboxBehavior, Hsla, InputEvent as _,
+    AnyWindowHandle, App, AppContext as _, Bounds, Context, Element, ElementId, Entity, EntityId,
+    EventEmitter, Global, GlobalElementId, Half, Hitbox, HitboxBehavior, Hsla, InputEvent as _,
     InspectorElementId, IntoElement, LayoutId, LongPressEvent, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollDelta, ScrollWheelEvent, SharedString,
     Style, Subscription, TextLayout, TouchDragEvent, TouchPhase, WeakEntity, Window, point, px,
@@ -844,6 +844,7 @@ impl TextSelectionHandle {
                         state.begin_edge_drag(edge, event.position, window, cx)
                     });
                     WindowSelectionState::resolve_content_keys(&state, cx);
+                    state.read(cx).flush_refresh(window);
                 }
             });
             // Mouse: the same drag for a pointer.
@@ -865,6 +866,7 @@ impl TextSelectionHandle {
                         state.begin_edge_drag(edge, event.position, window, cx)
                     });
                     WindowSelectionState::resolve_content_keys(&state, cx);
+                    state.read(cx).flush_refresh(window);
                 }
             });
         }
@@ -987,6 +989,7 @@ struct WindowSelectionState {
     did_hit_text: bool,
     frame_generation: Cell<u64>,
     finish_frame_scheduled: Cell<bool>,
+    needs_refresh: Cell<bool>,
     refresh_held_cursor: bool,
     mouse_down_prepared: bool,
     auto_scroll: AutoScroll,
@@ -995,9 +998,36 @@ struct WindowSelectionState {
     touch: TouchSelection,
 
     entity_id: Option<EntityId>,
+    window: Option<AnyWindowHandle>,
 }
 
 impl WindowSelectionState {
+    fn mark_needs_refresh(&self) {
+        self.needs_refresh.set(true);
+    }
+
+    fn flush_refresh(&self, window: &mut Window) {
+        if self.needs_refresh.replace(false) {
+            window.refresh();
+        }
+    }
+
+    fn take_refresh_window(&self) -> Option<AnyWindowHandle> {
+        self.needs_refresh
+            .replace(false)
+            .then_some(self.window)
+            .flatten()
+    }
+
+    fn has_any_participant_selection(&self, cx: &App) -> bool {
+        self.participants.borrow().values().any(|registration| {
+            registration
+                .participant
+                .upgrade()
+                .is_some_and(|participant| participant.read(cx).has_selection_to_clear())
+        })
+    }
+
     fn resolve_content_keys(state: &Entity<Self>, cx: &mut App) {
         let pending = state.read_with(cx, |state, _| {
             [
@@ -1030,7 +1060,8 @@ impl WindowSelectionState {
             state.publish_snapshots(cx);
         });
     }
-    fn acquire(window_id: gpui::WindowId, cx: &mut App) -> Entity<Self> {
+    fn acquire(window: AnyWindowHandle, cx: &mut App) -> Entity<Self> {
+        let window_id = window.window_id();
         if !cx.has_global::<SelectionStateRegistry>() {
             cx.set_global(SelectionStateRegistry::default());
         }
@@ -1073,6 +1104,7 @@ impl WindowSelectionState {
             Self {
                 active_scope,
                 entity_id: Some(entity_id),
+                window: Some(window),
                 ..Self::default()
             }
         });
@@ -1084,7 +1116,7 @@ impl WindowSelectionState {
 
     #[cfg(test)]
     fn ensure(window: &Window, cx: &mut App) -> Entity<Self> {
-        Self::acquire(window.window_handle().window_id(), cx)
+        Self::acquire(window.window_handle(), cx)
     }
 
     fn existing(window: &Window, cx: &App) -> Option<Entity<Self>> {
@@ -1135,6 +1167,7 @@ impl WindowSelectionState {
             if let Some(participant) = participant.upgrade()
                 && participant.read(cx).has_selection_to_clear()
             {
+                self.mark_needs_refresh();
                 if let Some(handler) = participant.update(cx, |state, cx| state.clear_state(cx)) {
                     handlers.push(handler);
                 }
@@ -1244,7 +1277,7 @@ impl WindowSelectionState {
                 generation: self.frame_generation.get(),
             },
         );
-        self.publish_snapshots(cx);
+        self.publish_snapshots_quietly(cx);
         if edges_moved {
             self.touch_changed(cx);
         }
@@ -1290,6 +1323,9 @@ impl WindowSelectionState {
             self.touch_changed(cx);
         }
         self.prune_dead_participants();
+        if self.has_any_participant_selection(cx) {
+            self.mark_needs_refresh();
+        }
         self.participants
             .borrow()
             .values()
@@ -1395,6 +1431,9 @@ impl WindowSelectionState {
             self.touch_changed(cx);
         }
         self.prune_dead_participants();
+        if self.has_any_participant_selection(cx) {
+            self.mark_needs_refresh();
+        }
         let handlers = self
             .participants
             .borrow()
@@ -1925,9 +1964,16 @@ impl WindowSelectionState {
     }
 
     fn publish_snapshots(&mut self, cx: &mut App) {
+        if self.publish_snapshots_quietly(cx) {
+            self.mark_needs_refresh();
+        }
+    }
+
+    fn publish_snapshots_quietly(&mut self, cx: &mut App) -> bool {
         self.prune_dead_participants();
         let snapshot = self.snapshot();
         let single_participant = self.single_participant();
+        let mut changed = false;
         for (id, registration) in self.participants.borrow().iter() {
             let Some(participant) = registration.participant.upgrade() else {
                 continue;
@@ -1944,8 +1990,10 @@ impl WindowSelectionState {
             if participant.read(cx).snapshot == participant_snapshot {
                 continue;
             }
+            changed = true;
             participant.update(cx, |state, cx| state.set_snapshot(participant_snapshot, cx));
         }
+        changed
     }
 
     fn coverage_for(&self, id: EntityId) -> TextSelectionCoverage {
@@ -2237,6 +2285,7 @@ impl TextSelection {
     pub fn clear(window: &mut Window, cx: &mut App) {
         if let Some(state) = live_text_selection_state(window, cx) {
             let handlers = state.update(cx, |state, cx| state.clear_state(cx));
+            state.read(cx).flush_refresh(window);
             dispatch_clear_handlers(handlers, cx);
         }
     }
@@ -2248,6 +2297,7 @@ impl TextSelection {
     pub fn end(window: &mut Window, cx: &mut App) {
         if let Some(state) = live_text_selection_state(window, cx) {
             state.update(cx, |state, cx| state.end(cx));
+            state.read(cx).flush_refresh(window);
         }
     }
 
@@ -2256,7 +2306,7 @@ impl TextSelection {
         cx: &mut App,
         callback: impl Fn(&mut App) + 'static,
     ) -> Subscription {
-        let state = WindowSelectionState::acquire(window.window_handle().window_id(), cx);
+        let state = WindowSelectionState::acquire(window.window_handle(), cx);
         cx.observe(&state, move |_, cx| callback(cx))
     }
 
@@ -2281,6 +2331,7 @@ impl TextSelection {
     pub fn select_all(window: &mut Window, cx: &mut App) {
         if let Some(state) = live_text_selection_state(window, cx) {
             state.update(cx, |state, cx| state.select_all_touched(cx));
+            state.read(cx).flush_refresh(window);
         }
     }
 
@@ -2295,6 +2346,7 @@ impl TextSelection {
                 state.begin_edge_drag(edge, finger, window, cx)
             });
             WindowSelectionState::resolve_content_keys(&state, cx);
+            state.read(cx).flush_refresh(window);
         }
     }
 
@@ -2302,12 +2354,14 @@ impl TextSelection {
         if let Some(state) = live_text_selection_state(window, cx) {
             state.update(cx, |state, cx| state.update_edge_drag(finger, window, cx));
             WindowSelectionState::resolve_content_keys(&state, cx);
+            state.read(cx).flush_refresh(window);
         }
     }
 
     pub fn end_edge_drag(window: &mut Window, cx: &mut App) {
         if let Some(state) = live_text_selection_state(window, cx) {
             state.update(cx, |state, cx| state.end_edge_drag(cx));
+            state.read(cx).flush_refresh(window);
         }
     }
 
@@ -2325,6 +2379,7 @@ impl TextSelection {
             return;
         }
         let handlers = state.update(cx, |state, cx| state.set_active_scope_state(scope, cx));
+        state.read(cx).flush_refresh(window);
         dispatch_clear_handlers(handlers, cx);
     }
 }
@@ -2496,11 +2551,13 @@ fn retain_text_selection_state(
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<WindowSelectionState> {
-    let window_id = window.window_handle().window_id();
+    let window_handle = window.window_handle();
+    let window_id = window_handle.window_id();
     let state = window.with_element_state::<Entity<WindowSelectionState>, _>(
         global_id.expect("TextSelection has a stable element id"),
         |retained, _| {
-            let state = retained.unwrap_or_else(|| WindowSelectionState::acquire(window_id, cx));
+            let state =
+                retained.unwrap_or_else(|| WindowSelectionState::acquire(window_handle, cx));
             (state.clone(), state)
         },
     );
@@ -2555,6 +2612,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
             if refresh_cursor {
                 WindowSelectionState::resolve_content_keys(&state, cx);
             }
+            state.read(cx).flush_refresh(window);
         });
     }
 
@@ -2608,6 +2666,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
             });
             WindowSelectionState::resolve_content_keys(&state, cx);
         }
+        state.read(cx).flush_refresh(window);
     });
 
     // Every touch is offered as a drag first; that is how a tap's mouse
@@ -2648,6 +2707,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
                 state.anchor.is_some()
             });
             if !selected {
+                state.read(cx).flush_refresh(window);
                 return;
             }
             window.capture_long_press(&state);
@@ -2671,6 +2731,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
         window.prevent_default();
         cx.stop_propagation();
         WindowSelectionState::resolve_content_keys(&state, cx);
+        state.read(cx).flush_refresh(window);
     });
 
     // A handle drag in progress follows the finger or the pointer wherever
@@ -2692,6 +2753,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
             _ => state.end_edge_drag(cx),
         });
         WindowSelectionState::resolve_content_keys(&state, cx);
+        state.read(cx).flush_refresh(window);
     });
     let drag_state = state.downgrade();
     window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
@@ -2704,15 +2766,17 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
                 state.update_edge_drag(event.position, window, cx)
             });
             WindowSelectionState::resolve_content_keys(&state, cx);
+            state.read(cx).flush_refresh(window);
         }
     });
     let drag_state = state.downgrade();
-    window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+    window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
         if phase.bubble()
             && event.button == MouseButton::Left
             && let Some(state) = drag_state.upgrade()
         {
             state.update(cx, |state, cx| state.end_edge_drag(cx));
+            state.read(cx).flush_refresh(window);
         }
     });
 
@@ -2732,11 +2796,12 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
                 state.update_in_window(event.position, window, cx)
             });
             WindowSelectionState::resolve_content_keys(&state, cx);
+            state.read(cx).flush_refresh(window);
         }
     });
 
     let mouse_up_state = state.downgrade();
-    window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+    window.on_mouse_event(move |_: &MouseUpEvent, phase, window, cx| {
         if phase.bubble()
             && let Some(state) = mouse_up_state.upgrade()
         {
@@ -2744,6 +2809,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
                 state.mouse_down_prepared = false;
                 state.end(cx)
             });
+            state.read(cx).flush_refresh(window);
         }
     });
 
@@ -2775,6 +2841,7 @@ fn paint_text_selection(state: &Entity<WindowSelectionState>, window: &mut Windo
                 state.update_in_window(position, window, cx)
             });
             WindowSelectionState::resolve_content_keys(&state, cx);
+            state.read(cx).flush_refresh(window);
         }
     });
 }
@@ -2799,5 +2866,10 @@ pub(crate) fn clear_window_text_selection(window_id: gpui::WindowId, cx: &mut Ap
         return;
     };
     let handlers = state.update(cx, |state, cx| state.clear_state(cx));
+    if let Some(window) = state.read(cx).take_refresh_window() {
+        cx.defer(move |cx| {
+            _ = window.update(cx, |_, window, _| window.refresh());
+        });
+    }
     dispatch_clear_handlers(handlers, cx);
 }

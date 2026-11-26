@@ -3,14 +3,15 @@ import { readColorScheme, observeColorScheme } from '../../editor/src/color-sche
 import { preserveHistoryMouseButtons, preserveNativeContextMenu } from '../../editor/src/browser-shortcuts.js';
 import { DocumentClient } from '../../editor/src/document-client.js';
 import '../../editor/src/editor-shell.css';
-import { createPreviewTransport, prepareRequestBody } from './transport.js';
+import { createPreviewTransport, extractBinaryFile, prepareRequestBody } from './transport.js';
 import { preview } from './preview.js';
 import { createProxyTransport } from '../proxy/client.js';
 import init, {
-  advance_body_preparation, apply_syntax, begin_response, body_preparation_progress,
-  cancel_body_preparation, consume_custom_context_menu, finish_archive, finish_request_error,
-  install_body, install_non_json_response, prepare_body, run, selected_response_header_text,
-  set_binary_file, set_color_scheme, set_request_loading,
+  advance_body_preparation, apply_syntax, begin_response, binary_drop_tab, binary_paste_tab,
+  body_preparation_progress, cancel_body_preparation, consume_custom_context_menu, finish_archive,
+  finish_request_error, install_body, install_non_json_response, prepare_body, run,
+  selected_response_text, set_binary_drag_over, set_binary_file, set_color_scheme,
+  set_request_loading,
 } from './wasm/gpui_http_client_web.js';
 
 function downloadName({ headers, url }) {
@@ -237,14 +238,98 @@ async function start(transport, initial) {
     throw error;
   }
   // Browser menu commands can send a copy event without a keydown.
-  const copyHeaders = event => {
+  const copyResponseSelection = event => {
     if (!event.clipboardData) return;
-    const text = selected_response_header_text();
+    const text = selected_response_text();
     if (!text) return;
     event.clipboardData.setData('text/plain', text);
     event.preventDefault();
   };
-  document.addEventListener('copy', copyHeaders);
+  document.addEventListener('copy', copyResponseSelection);
+  const hasBinaryDropPayload = dataTransfer => {
+    const types = Array.from(dataTransfer?.types ?? []);
+    return types.includes('Files') || types.includes('text/plain');
+  };
+  const binaryDropTarget = event => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return -1;
+    const rect = canvas.getBoundingClientRect();
+    return binary_drop_tab(event.clientX - rect.left, event.clientY - rect.top);
+  };
+  let dragOverTab = -1;
+  const setDragOverTab = tab => {
+    if (tab < 0 && dragOverTab < 0) return;
+    dragOverTab = tab;
+    set_binary_drag_over(tab);
+  };
+  const onDragOver = event => {
+    const tab = hasBinaryDropPayload(event.dataTransfer) ? binaryDropTarget(event) : -1;
+    if (tab < 0) {
+      setDragOverTab(-1);
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragOverTab(tab);
+  };
+  const onDragLeave = event => {
+    if (event.relatedTarget === null) setDragOverTab(-1);
+  };
+  let canvasHovered = false;
+  const resetCanvasHover = () => {
+    canvasHovered = false;
+  };
+  const onDragEnd = () => {
+    resetCanvasHover();
+    setDragOverTab(-1);
+  };
+  const onDrop = event => {
+    resetCanvasHover();
+    setDragOverTab(-1);
+    const tab = binaryDropTarget(event);
+    if (tab < 0 || closedTabs.has(tab)) return;
+    const file = extractBinaryFile(event.dataTransfer, 'dropped');
+    if (!file) return;
+    event.preventDefault();
+    documentsFor(tab).setBinaryFile(file);
+  };
+  const onPaste = event => {
+    const tab = binary_paste_tab();
+    if (tab < 0 || closedTabs.has(tab)) return;
+    const file = extractBinaryFile(event.clipboardData, 'pasted');
+    if (!file) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    documentsFor(tab).setBinaryFile(file);
+  };
+  const onPointerEnter = event => {
+    if (event.target?.tagName === 'CANVAS') canvasHovered = true;
+  };
+  const onPointerLeave = event => {
+    if (event.target?.tagName === 'CANVAS') canvasHovered = false;
+  };
+  const onPointerMove = event => {
+    if (canvasHovered || event.pointerType === 'touch') return;
+    const canvas = document.querySelector('canvas');
+    if (!canvas || event.target !== canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    canvas.dispatchEvent(new PointerEvent('pointerenter', {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    }));
+  };
+  window.addEventListener('blur', resetCanvasHover);
+  window.addEventListener('pointerenter', onPointerEnter, { capture: true });
+  window.addEventListener('pointerleave', onPointerLeave, { capture: true });
+  window.addEventListener('pointermove', onPointerMove, { capture: true });
+  window.addEventListener('dragover', onDragOver);
+  window.addEventListener('dragleave', onDragLeave);
+  window.addEventListener('dragend', onDragEnd);
+  window.addEventListener('drop', onDrop);
+  window.addEventListener('paste', onPaste, { capture: true });
   let dark = readColorScheme().dark;
   const stopTheme = observeColorScheme(state => {
     if (dark === state.dark) return;
@@ -257,7 +342,16 @@ async function start(transport, initial) {
     stopTheme();
     stopHistory();
     stopContextMenu();
-    document.removeEventListener('copy', copyHeaders);
+    document.removeEventListener('copy', copyResponseSelection);
+    window.removeEventListener('blur', resetCanvasHover);
+    window.removeEventListener('pointerenter', onPointerEnter, { capture: true });
+    window.removeEventListener('pointerleave', onPointerLeave, { capture: true });
+    window.removeEventListener('pointermove', onPointerMove, { capture: true });
+    window.removeEventListener('dragover', onDragOver);
+    window.removeEventListener('dragleave', onDragLeave);
+    window.removeEventListener('dragend', onDragEnd);
+    window.removeEventListener('drop', onDrop);
+    window.removeEventListener('paste', onPaste, { capture: true });
   });
 }
 
